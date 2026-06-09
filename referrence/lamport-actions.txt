@@ -1,0 +1,3148 @@
+PAGES 52
+
+--- PAGE 1 ---
+
+The Temporal Logic of Actions
+LESLIE LAMPORT
+Digital Equipment Corporation
+The temporal logic of actions (TLA) is a logic for specifying and reasoning about concurrent
+systems. Systems and their properties are represented in the same logic, so the assertion that
+a system meets its speciﬁcation and the assertion that one system implements another are both
+expressed by logical implication. TLA is very simple; its syntax and complete formal semantics are
+summarized in about a page. Yet, TLA is not just a logician’s toy; it is extremely powerful, both
+in principle and in practice. This report introduces TLA and describes how it is used to specify
+and verify concurrent algorithms. The use of TLA to specify and reason about open systems will
+be described elsewhere.
+Categories and Subject Descriptors: D.2.4 [Software Engineering ]: Program Veriﬁcation—
+correctness proofs; F.3.1 [Logics and Meanings of Programs ]: Specifying and Verifying and
+Reasoning about Programs—Speciﬁcation techniques
+General terms: Theory, Veriﬁcation
+Additional Key Words and Phrases: Concurrent programming, liveness properties, safety proper-
+ties
+1. LOGIC VERSUS PROGRAMMING
+A concurrent algorithm is usually speciﬁed with a program. Correctness of the
+algorithmmeansthatthe programsatisﬁesadesiredproperty. We proposeasimpler
+approach in which both the algorithm and the property are speciﬁed by formulas in
+a single logic. Correctness of the algorithm means that the formula specifying the
+algorithm implies the formula specifying the property, whereimplies is ordinary
+logical implication.
+We are motivated not by an abstract ideal of elegance, but by the practical
+problem of reasoning about real algorithms. Rigorous reasoning is the only way
+to avoid subtle errors in concurrent algorithms, and we want to make reasoning as
+simple as possible by making the underlying formalism simple.
+How can we abandon conventional programming languages in favor of logic if the
+algorithmmustbe coded asaprogramto be executed?Theansweristhat wealmost
+always reason about an abstract algorithm, not about a concurrent program that
+is actually executed. A typical example is the distributed spanning-tree algorithm
+used in the Autonet local area network [Schroeder et al. 1990]. The algorithm can
+be described in about one page of pseudo-code, but its implementation required
+Author’s address: Systems Research Center, Digital Equipment Corporation, 130 Lytton Avenue,
+Palo Alto, CA 94301.
+Permission to copy without fee all or part of this material is granted provided that the copies are
+not made or distributed for direct commercial advantage, the ACM copyright notice and the title
+of the publication and its date appear, and notice is given that copying is by permission of the
+Association for Computing Machinery. To copy otherwise, or to republish, requires a fee and/or
+speciﬁc permission.
+c⃝ 1993 ACM 0000-0000/93/0000-0000 $00.00
+ACM Transactions on Programming Languages and Systems, Vol ? No. ?, November 1993, Pages 1–52.
+
+--- PAGE 2 ---
+
+2 · Leslie Lamport
+about 5000 lines of C code and 500 lines of assembly code.1 Reasoning about
+5000 lines of C would be a herculean task, but we can reason about a one-page
+abstract algorithm. By starting from a correct algorithm, we can avoid the timing-
+dependent synchronization errors that are the bane of concurrent programming. If
+the algorithms we reason about are not real, compilable programs, then they do
+not have to be written in a programming language.
+But, why replace a programming language by logic?Aren’t programs simpler
+than logical formulas?The answer is no. Logic is the formalization of everyday
+mathematics, and everyday mathematics is simpler than programs. Consider the
+Pascal statementy:=x+ 1. Using the convention thaty
+′ denotes the new value
+ofy, we can rewrite this statement as the mathematical formulay′ =x+1. Man y
+readers will think that the Pascal statement and the formula are equally simple.
+They are wrong. The formula is much simpler than the Pascal statement. Equality
+is a simple concept that ﬁve-year-old children understand. Assignment (:=) is a
+complicated concept that university students ﬁnd diﬃcult. Equality obeys simple
+algebraic laws; assignment doesn’t. If we assume that all variables are integer-
+valued, we can subtracty
+′ from both sides of the formula to obtain the equivalent
+formula 0 =x+1 −y′. Trying this with the Pascal statement yields the absurdity
+0: =x+1 −y.
+A programming language may use mathematical terms likefunction, but the con-
+structs they represent are not as simple as the corresponding mathematical con-
+cepts. Mathematical functions are simple; children in the United States learn about
+them at the age of twelve. Pascal functions are complicated, involving concepts like
+call by reference, call by value, and aliasing; it is unlikely that many university
+students understand them well. Advocates of so-called functional programming
+languages often claim that they just use ordinary mathematical functions, but try
+explaining to a twelve-year-old how evaluating a mathematical function can display
+a character on her computer screen.
+Since real languages like Pascal are so complicated, methods for reasoning about
+algorithms are usually based on toy languages. Although simpler than real pro-
+gramming languages, toy languages are more complicated than simple logic. More-
+over, their resemblance to real languages can be dangerously misleading. In toy
+languages, the Hoare triple{x=0}y:=x+1 {y=x+1 }is valid, which means
+that executingy:=x+1 in a state in whichxequals 0 produces a state in which
+yequalsx+1. However, in Pascal, the program fragment
+x:= 0;y:=x+1; writ e(y,x+1)
+can print two diﬀerent values when used in certain contexts, even ifxandyare
+variables of typeinteger. The programmer who tries using toy-language rules to
+reason about real Pascal programs is in for a rude surprise.
+We do not mean to belittle programming languages. They are complicated be-
+cause they have a diﬃcult job to do. Mathematics can be based on simple concepts
+like functions. Programming languages cannot, because they must allow reason-
+ably simple compilers to translate programs into reasonably eﬃcient code for com-
+plex computers. Real languages must embrace diﬃcult concepts like the distinc-
+tion between values and locations, which leads to call-by-reference arguments and
+1Assembly code was needed because C has no primitives for sending messages across wires.
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 3 ---
+
+The Temporal Logic of Actions · 3
+aliasing—complications that have no counterpart in simple mathematics. Program-
+ming languages are necessary for writing real programs; but mathematics oﬀers a
+simpler alternative for reasoning about concurrent algorithms.
+To oﬀer a practical alternative to programming languages, a logic must be both
+simple and expressive. There is no point trading a programming language for a
+logic that is just as complicated and hard to understand. Furthermore, a logic
+that achieves simplicity at the expense of needed expressiveness will be impractical
+because the formulas describing real algorithms will be too long and complicated
+to understand.
+The logic that we propose for reasoning about concurrent algorithms is the tem-
+poral logic of actions, abbreviated as TLA. All TLA formulas can be expressed in
+terms of familiar mathematical operators(such as∧) plus three new ones:
+′ (prime),
+✷,a n d∃∃∃∃∃∃. TLA is simple enough that its syntax and complete formal semantics can
+be written in about a page. Almost all that is needed to specify and reason about
+algorithms in TLA—its syntax, formal semantics, derived notation, and axioms and
+proof rules—appears in Figures 4 and 5 of Section 5.6 and Figure 9 of Section 8.2.
+(Missing from those ﬁgures are the rules for adding auxiliary variables, mentioned
+in Section 8.3.2.)
+Logic is a tool. Its true test comes with use. Although TLA and its proof rules
+can be described formally in a couple of pages, such a description would tell you
+nothing about how TLA is used. In this article, we develop TLA as a method of
+describing and reasoning about concurrent algorithms. We limit ourselves to simple
+examples, so we can only hint at how TLA works with real algorithms.
+TLA combines two logics: a logic of actions, described in Section 2, and a stan-
+dard temporal logic, described in Section 3. TLA is easiest to explain in terms of a
+logic called RTLA, which is deﬁned in Section 4. We describe TLA itself and illus-
+trate its use in Sections 5–8. Section 9 mentions further applications and discusses
+what TLA can and cannot do, and Section 10 relates TLA to other formalisms.
+2. THE LOGIC OF ACTIONS
+2.1 Values, Variables, and States
+Algorithms manipulate data. We assume a collectionVal ofvalues, where a value is
+a data item. The collectionVal includes numbers such as 1, 7, and−14, strings like
+“abc”, and sets like the setNat of natural numbers. We don’t bother to deﬁneVal
+precisely, but simply assume that it contains all the values needed for our examples
+(Note
+2 1). We also assume the booleanstrue andfalse, which for technical reasons
+are not considered to be values.
+We think of algorithms as assigning values to variables. We assume an inﬁnite set
+Var of variable names. We won’t describe a precise syntax for generating variable
+names, but will simply use names likex andsem.
+A logic consists of a set of rules for manipulating formulas. To understand what
+the formulas and their manipulation mean, we need a semantics. A semantics is
+given by assigning a semantic meaning [[F]] to each syntactic objectFin the logic.
+The semantics of our logic is deﬁned in terms ofstates. A state is an assignment
+of values to variables—that is, a mapping from the setVar of variable names to
+2Notes appear at the end of the article.
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 4 ---
+
+4 · Leslie Lamport
+the collectionVal of values. Thus a statesassigns a values(x)t oav a r i a b l ex.T h e
+collection of all possible states is denotedSt.
+We writes[[x]] to denotes(x). Thus, we consider the meaning [[x]] of the variable
+xto be a mapping from states to values, using a postﬁx notation for function
+application. States and values are purely semantic concepts; they do not appear
+explicitly in formulas.
+2.2 State Functions and Predicates
+A state function is a nonboolean expression built from variables and constant
+symbols—for example,x
+2 +y−3 (Note 2). The meaning [[f]] of a state functionfis
+a mapping from the collectionSt of states to the collectionVal of values. For exam-
+ple, [[x2 +y−3]] is the mapping that assigns to a statesthe value (s[[x]])2+s[[y]]−3,
+where2 and3 are constant symbols, and 2 and 3 are the values that they represent.
+We will not bother distinguishing between constant symbols and their values. We
+use a postﬁx functional notation, lettings[[f]] denote the value that [[f]] assigns to
+states. The semantic deﬁnition is
+s[[f]]
+∆
+= f(∀‘v’:s[[v]]/v)( 1 )
+wheref(∀‘v’:s[[v]]/v) denotes the value obtained fromfby substitutings[[v]] for
+v, for all variablesv.( T h es y m b o l
+∆
+=m e a n sequals by deﬁnition .)
+Av a r i a b l exis a state function—the state function that assigns the values[[x]]
+to the states. The deﬁnition of [[f]] for a state functionftherefore extends the
+deﬁnition of [[x]] for a variablex.
+A state predicate, called apredicate for short, is a boolean expression built from
+variables and constant symbols—for example,x2 =y−3a n dx∈Nat.T h em e a n i n g
+[[P]] of a predicatePis a mapping from states to booleans, sos[[P]] equalstrue or
+false for every states. We say that a statessatisﬁes ap r e d i c a t ePiﬀ (if and only
+if)s[[P]] equalstrue.
+State functions correspond both to expressions in ordinary programming lan-
+guages and to subexpressions of the assertions used in ordinary program veriﬁca-
+tion. Predicates correspond both to boolean-valued expressions in programming
+languages and to assertions.
+2.3 Actions
+An action is a boolean-valued expression formed from variables, primed variables,
+and constant symbols—for example,x′ +1= yandx−1 /∈z′ are actions, where
+x,y,a n dzare variables.
+An action represents a relation between old states and new states, where the
+unprimed variables refer to the old state and the primed variables refer to the new
+state. Thus,y=x′ + 1 is the relation asserting that the value ofyin the old
+state is one greater than the value ofxin the new state. An atomic operation of a
+concurrent program will be represented in TLA by an action.
+Formally, the meaning [[A]] of an actionAis a relation between states—a function
+that assigns a booleans[[A]]tto a pair of statess,t. We deﬁnes[[A]]tby considering
+sto be the “old state” andtthe “new state”, sos[[A]]tis obtained fromA by
+replacing each unprimed variablevbys[[v]] and each primed variablev′ byt[[v]]:
+s[[A]]t
+∆
+= A(∀‘v’:s[[v]]/v,t[[v]]/v′)( 2 )
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 5 ---
+
+The Temporal Logic of Actions · 5
+Thus,s[[y=x′ +1] ]tequals the booleans[[y]] =t[[x]] + 1.
+The pair of statess,tis called an “Astep” iﬀs[[A]]tequalstrue.I f a c t i o nA
+represents an atomic operation of a program, thens,tis anAstep iﬀ executing the
+operation in statescan produce statet.
+2 . 4 P r e d i c a t e sa sA c t i o n s
+We havedeﬁned apredicatePtobe aboolean-valuedexpressionbuiltfromvariables
+and constant symbols, sos[[P]] is a boolean, for any states. We can also viewP
+as an action that contains no primed variables. Thus,s[[P]]tis a boolean, which
+equalss[[P]], for any statessandt. A pair of statess,tis aPstep iﬀssatisﬁesP.
+Both state functions and predicates are expressions built from variables and con-
+stant symbols. For any state function or predicateF, we deﬁneF′ to be the
+expression obtained by replacing each variablevinFby the primed variablev′:
+F′ ∆
+= F(∀‘v’:v′/v)( 3 )
+IfPis a predicate, thenP′ is an action, ands[[P′]]tequalst[[P]] for any statess
+andt.
+2.5 Validity and Provability
+An actionAis said to bevalid, written|=A,i ﬀe v e r ys t e pi sa nAstep. Formally,
+|=A
+∆
+= ∀s,t∈St :s[[A]]t
+As a special case of this deﬁnition, ifPis a predicate, then
+|=P
+∆
+= ∀s∈St :s[[P]]
+A valid action is one that is true regardless of what values one substitutes for the
+primed and unprimed variables. For example, the action
+(x′ +y∈Nat) ⇒ (2(x′ +y)≥x′ +y)( 4 )
+is valid. The validity of an action thus expresses a theorem about values.
+A logic contains rules for proving formulas. It is customary to write⊢ Fto
+denote that formulaFis provable by the rules of the logic. Soundness of the logic
+means that every provable formula is valid—in other words, that⊢Fimplies|=F.
+The validity of an action such as (4) is proved by ordinary mathematical reasoning
+(Note 3). How this reasoning is formalized does not concern us here, so we will
+not bother to deﬁne a logic for proving the validity of actions. But, this omission
+does not mean such reasoning is unimportant. When verifying the validity of TLA
+formulas, most of the work goes into proving the validity of actions (and of predi-
+cates, a special class of actions). The practical success of any TLA veriﬁcation will
+depend primarily on how good the veriﬁer is at ordinary mathematical reasoning.
+2.6 Rigid Variables and Quantiﬁers
+Consider a program that is described in terms of a parametern—for example, an
+n-process mutual exclusion algorithm. An action representing an atomic operation
+of that programmay contain the symboln. This symbol does not represent a known
+value like 1 or“abc”. But unlike the variables we have considered so far, the value
+ofn does not change; it must be the same in the old and new state.
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 6 ---
+
+6 · Leslie Lamport
+The symboln denotes some ﬁxed but unknown value. A programmer would call
+it aconstant because its value doesn’t change during execution of the program,
+while a mathematician would call it avariable because it is an “unknown”. We
+call such a symboln arigid variable. The variables introduced above will be called
+ﬂexible variables,o rs i m p l yvariables.
+An expression liken+1, built from rigid variables and constant symbols, is called
+aconstant expression. We generalize state functions and actions to allow arbitrary
+constant expressions instead of just constant symbols, and to allow quantiﬁcation
+over rigid variables. For example, ifxis a (ﬂexible) variable andm andn are rigid
+variables, then∃m ∈Nat : mx′ = n +xis the action asserting that there exists
+some natural numberm such thatm times the value ofxin the new state equalsn
+plus its value in the old state (Note 4):
+s[[∃m ∈Nat : mx′ =n+x]]t
+∆
+= ∃m ∈Nat : m(t[[x]]) =n+s[[x]]
+Thus, the semantics of state functions and actions is no longer given in terms
+only of values, but of ﬁrst-order formulas containing free rigid variables and values.
+However, a state is still an assignment of values to ﬂexible variables.
+An actionAis valid iﬀs[[A]]tequalstrue for all statessandtand all possible
+values of its free rigid variables—for example:
+|=( x
+′ +y+ m ∈Nat) ⇒∀ n ∈Nat : n(x′ +y+ m)≥(x′ +y+ m)
+We do not permit quantiﬁcation over ﬂexible variables in state functions and ac-
+tions.
+2.7 The Enabled Predicate
+For any actionA, we deﬁneEnabled Ato be the predicate that is true for a state
+iﬀ it is possible to take anAstep starting in that state. Semantically,Enabled A
+is deﬁned by
+s[[Enabled A]]
+∆
+= ∃t∈St :s[[A]]t (5)
+for any states. The predicateEnabled Acan be deﬁned syntactically as follows.
+Ifv1,...,vn are all the (ﬂexible) variables that occur inA,t h e n
+Enabled A
+∆
+= ∃c1,...,cn : A( c1/v′
+1,...,cn/v′
+n)
+whereA( c1/v′
+1,...,cn/v′
+n) denotes the formula obtained by substituting new rigid
+variablesci for all occurrences of thev′
+i inA. For example,
+Enabled (y=(x′)2 + n) ≡∃ c :y=c2 + n
+If actionArepresents an atomic operation of a program, thenEnabled Ais true
+for those states in which it is possible to perform the operation.
+3. SIMPLE TEMPORAL LOGIC
+An execution of an algorithm is often thought of as a sequence of steps, each
+producing a new state by changing the values of one or more variables. We will
+consider an execution to be the resulting sequence of states, and will take the
+semantic meaning of an algorithm to be the collection of all its possible executions.
+Reasoning about algorithms will therefore require reasoning about sequences of
+states. Such reasoning is the province of temporal logic.
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 7 ---
+
+The Temporal Logic of Actions · 7
+3.1 Temporal Formulas
+A temporal formula is built from elementary formulas using boolean operators and
+the unary operator✷ (readalways). For example, ifE1 andE2 are elementary
+formulas, then¬E1∧✷(¬E2)a n d✷(E1 ⇒ ✷(E1∨E2)) are temporal formulas. We
+deﬁne simple temporal logic for an arbitrary class of elementary formulas. TLA
+will be deﬁned later as a special case of simple temporal logic by specifying its
+elementary formulas.
+The semantics of temporal logic is based onbehaviors,w h e r eab e h a v i o ri sa n
+inﬁnite sequence of states. Think of a behavior as the sequence of states that a
+computing device might go through when executing an algorithm. (It might seem
+that a terminating execution would be represented by a ﬁnite sequence of states,
+but we will see in Section 5.5 why inﬁnite sequences are enough.)
+We will deﬁne the meaning of a temporal formula in terms of the meanings of the
+elementary formulas it contains. Since an arbitrary temporal formula is built up
+from elementary formulas using boolean operators and the✷ operator, and all the
+boolean operators can be deﬁned in terms of∧and¬, it suﬃces to deﬁne [[F∧G]],
+[[¬F]], and [[✷F]] in terms of [[F]] and [[G]].
+We interpret a temporal formula as an assertion about behaviors. Formally, the
+meaning [[F]] of a formulaFis a boolean-valued function on behaviors. We letσ[[F]]
+denote the boolean value that formulaFassigns to behaviorσ, and we say thatσ
+satisﬁes Fiﬀσ[[F]] equalstrue.
+The deﬁnitions of [[F∧G]] and [[¬F]] are simple:
+σ[[F∧G]]
+∆
+=σ[[F]]∧σ[[G]]
+σ[[¬F]]
+∆
+= ¬σ[[F]]
+In other words, a behavior satisﬁesF∧Giﬀ it satisﬁes bothFandG;a n da
+behavior satisﬁes¬Fiﬀ it does not satisfyF. One can derive similar formulas
+for the other boolean operators. For example, sinceF⇒Gequals¬(F∧¬G), a
+straightforward calculation proves thatσ[[F⇒G]] equalsσ[[F]]⇒σ[[G]].
+We now deﬁne [[✷F]] in terms of [[F]]. Let⟨s0,s1,s2,...⟩ denote the behavior
+whose ﬁrst state iss0, second state iss1, and so on. Then
+⟨s0,s1,s2,...⟩[[✷F]]
+∆
+= ∀n∈Nat : ⟨sn,sn+1,sn+2,...⟩[[F]] (6)
+Think of the behavior⟨s0,...⟩ as representing the evolution of the universe, where
+sn is the state of the universe at “time”n. The formula⟨s0,...⟩[[F]] asserts thatF
+is true at time 0 of this behavior, and⟨sn,...⟩[[F] ]a s s e r t st h a ti ti st r u ea tt i m en.
+Thus,⟨s0,...⟩[[✷F]] asserts thatFis true at all times during the behavior⟨s0,...⟩.
+In other words,✷Fasserts thatFisalways true.
+3.2 Some Useful Temporal Formulas
+3.2.1 Eventually. For any temporal formulaF,l e t✸Fbe deﬁned by
+✸F
+∆
+= ¬✷¬F (7)
+This formula asserts that it is not the case thatFis always false. In other words,
+✸Fasserts thatFiseventually true. Since¬∀¬is the same as∃,w eh a v e
+⟨s0,s1,s2,...⟩[[✸F]]≡∃n∈Nat : ⟨sn,sn+1,sn+2,...⟩[[F]]
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 8 ---
+
+8 · Leslie Lamport
+for any behavior⟨s0,s1,...⟩. Therefore, a behavior satisﬁes✸FiﬀFis true at
+some time during the behavior.
+3.2.2Inﬁnitely Often and Eventually Always. The formula✷✸Fis true for a
+behavior iﬀ✸Fis true at all timesnduring that behavior, and✸Fis true at time
+niﬀFis true at some timemgreater than or equal ton. Formally,
+⟨s0,s1,...⟩[[✷✸F]]≡∀n∈Nat : ∃m∈Nat : ⟨sn+ m,sn+ m+1,...⟩[[F]]
+A formula of the form∀n: ∃m: g(n+m) asserts thatg(i) is true for inﬁnitely
+many values ofi. Thus, a behavior satisﬁes✷✸FiﬀFis true at inﬁnitely many
+times during the behavior. In other words,✷✸Fasserts thatFis trueinﬁnitely
+often.
+The formula✸✷Fasserts that eventuallyFis always true. Thus, a behavior
+satisﬁes✸✷Fiﬀ there is some time such thatFis true from that time on.
+3.2.3Leads To. For any temporal formulasFandG, we deﬁneF❀ Gto equal
+✷(F⇒ ✸G). This formula asserts that any timeFis true,Gis true then or at
+some later time. The operator❀ (readleads to) is transitive, meaning that any
+behavior satisfyingF❀ GandG❀ Halso satisﬁesF❀ H. We suggest that
+readers convince themselves both that❀ is transitive, and that it would not be
+hadF❀ Gbeen deﬁned to equalF⇒ ✸G.
+3.3 Validity and Provability
+At e m p o r a lf o r m u l aFis said to bevalid, written|=F, iﬀ it is satisﬁed by all
+possible behaviors. More precisely,
+|=F
+∆
+= ∀σ∈St∞ :σ[[F]] (8)
+whereSt∞ denotes the collection of all behaviors (inﬁnite sequences of elements of
+St).
+We will represent both algorithms and properties as temporal formulas. An
+algorithm is represented by a temporal formulaFsuch thatσ[[F]] equalstrue iﬀσ
+represents a possible execution of the algorithm. IfGis a temporal formula, then
+F⇒Gis valid iﬀσ[[F⇒G]] equalstrue for every behaviorσ.S i n c eσ[[F⇒G]]
+equalsσ[[F]]⇒σ[[G]], validity ofF⇒Gmeans that every behavior representing a
+possible execution of the algorithm satisﬁesG.I no t h e rw o r d s ,|=F⇒Gasserts
+that the algorithm represented byFsatisﬁes propertyG.
+In Section 5.6, we give rules for proving temporal formulas. As usual, soundness
+of the rules means that every provable formula is valid—that is,⊢Fimplies|=F
+for any temporal formulaF.
+4. THE RA W LOGIC
+4.1 Actions as Temporal Formulas
+TheRaw Temporal Logic of Actions, or RTLA, is obtained by letting the elementary
+temporal formulas be actions. To deﬁne the semantics of RTLA formulas, we must
+deﬁne what it means for an action to be true on a behavior.
+In Section 2.3, we deﬁned the meaning [[A]] of an actionAto be a boolean-valued
+function that assigns the values[[A]]tto the pair of statess,t. We deﬁneds,tto be
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 9 ---
+
+The Temporal Logic of Actions · 9
+anAstep iﬀs[[A]]tequalstrue. We now deﬁne [[A]] to be true for a behavior iﬀ the
+ﬁrst pair of states in the behavior is anAstep (Note 5). Formally,
+⟨s0,s1,s2,...⟩[[A]]
+∆
+=s0[[A]]s1 (9)
+RTLA formulasare built up from actions using logicaloperatorsandthe temporal
+operator✷.T h u s ,i fAis an action, then✷Ais an RTLA formula. Its meaning is
+computed as follows.
+⟨s0,s1,s2,...⟩[[✷A]]
+≡∀n∈Nat : ⟨sn,sn+1,sn+2,...⟩[[A]] by (6)
+≡∀n∈Nat :sn[[A]]sn+1 by (9)
+In other words, a behavior satisﬁes✷Aiﬀ every step of the behavior is anAstep.
+In Section 2.4, we observed that ifPis a predicate, thens[[P]]tequalss[[P]].
+Therefore,
+⟨s0,s1,...⟩[[P]]≡s0[[P]]
+⟨s0,s1,...⟩[[✷P]]≡∀n∈Nat :sn[[P]]
+In other words, a behavior satisﬁes a predicatePiﬀ the ﬁrst state of the behavior
+satisﬁesP. A behavior satisﬁes✷Piﬀ all states in the behavior satisfyP.
+W ew i l ls e et h a tt h er a wl o g i cR T L Ai st o op o w e r f u l ;i ta l l o w so n et om a k ea s -
+sertions about behaviors that should not be assertable. We will deﬁne the formulas
+of TLA to be a subset of RTLA formulas.
+4.2 Describing Programs with RTLA Formulas
+We have deﬁned the syntax and semantics of RTLA formulas, but have given no
+idea what RTLA is good for. We illustrate how RTLA can be used, by describing
+the simple Program 1 of Figure 1 as an RTLA formula. This program is written in
+a conventional language, using Dijkstra’sdo construct [Dijkstra 1976], with angle
+brackets enclosing operations that are assumed to be atomic. An execution of this
+program begins withxandyboth zero, and repeatedly increments eitherxory(in
+a single operation), choosing nondeterministically between them. We now deﬁne
+an RTLA formula Φ that represents this program, meaning thatσ[[Φ]] equalstrue
+iﬀ the behaviorσrepresents a possible execution of Program 1.
+The formula Φ is deﬁned in Figure 2. The predicateInit
+Φ asserts the initial
+condition, thatxandyare both zero. The semantic meaning of actionM 1 is a
+relation between states asserting that the value ofxin the new state is one greater
+than its value in the old state, and the value ofyis the same in the old and new
+states. Thus, anM 1 step representsanexecution ofthe program’satomic operation
+of incrementingx. Similarly, anM 2 step represents an execution of the program’s
+other atomic operation, which incrementsy. The actionM is deﬁned to be the
+disjunction ofM 1 andM 2,s oa nM step represents an execution of one program
+operation. Formula Φ is true of a behavior iﬀInitΦ is true of the ﬁrst state and
+every step is anM step. In other words, Φ asserts that the initial condition is true
+var natural x,y =0;
+do ⟨ true → x := x +1 ⟩
+⟨ true → y := y+1 ⟩ od
+Fig. 1. Program 1—a simple program, written in a
+conventional language.
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 10 ---
+
+10 · Leslie Lamport
+Init Φ
+∆
+=( x =0 ) ∧ (y =0 )
+M 1
+∆
+=( x′ = x +1 ) ∧ (y′ = y) M 2
+∆
+=( y′ = y+1 ) ∧ (x′ = x)
+M
+∆
+= M 1 ∨M 2
+Φ
+∆
+= InitΦ ∧ ✷M
+Fig. 2. An RTLA formula Φ describing Program 1.
+initially, and that every step of the behavior represents the execution of an atomic
+operation of the program. Clearly, a behavior satisﬁes Φ iﬀ it represents a possible
+execution of Program 1 (Note 6).
+There is nothing special about our choice of names, or in the particular way of
+writing Φ. There are many ways of writing equivalent logical formulas. Here are a
+couple of formulas that are equivalent to Φ.
+(x=0 )∧ ✷(M
+1 ∨M2) ∧(y=0 )
+InitΦ ∧ ✷((x′ =x+1) ∨(y′ =y+1) ) ∧ ✷((x′ =x) ∨(y′ =y))
+The particular way of deﬁning Φ in Figure 2 was chosen to make the correspondence
+with Figure 1 obvious.
+5. TLA
+5.1 Adding Stuttering Steps
+Formula Φ of Figure 2 is very simple. Unfortunately, it is too simple. In addition
+to steps in whichxoryis incremented, a formula describing Program 1 should
+allow “stuttering” steps that leave bothxandyunchanged.
+To understand why stuttering steps are needed, consider a clock that displays
+hours and minutes. It is speciﬁed by a formula Π with two variables:hrepresenting
+the hours display andmrepresenting the minutes display. Now consider a clock
+that displays hours, minutes, and seconds; it is represented by a formula Ψ with
+three variables:h,m, and another variablesrepresenting the seconds display. A
+clock that displays hours, minutes, and seconds should satisfy the speciﬁcation Π
+of a clock that displays hours and minutes. (If we don’t want the seconds display,
+we can always cover it up.) Hence, any behavior satisfying Ψ should satisfy Π.
+Behaviors satisfying Ψ contain sequences of 59 consecutive steps in whichhand
+mdo not change, so Π must allow such steps. From the point of view of a clock
+displaying only hours and minutes, steps in whichhandmdo not change are
+stuttering steps. In general, a speciﬁcation Π should be invariant under stuttering,
+meaning that adding or removing stuttering steps from a behavior does not aﬀect
+whether the behavior satisﬁes Π.
+It is easy to modify formula Φ of Figure 2 so it asserts that every step is either
+anM step or a step that leavesxandyunchanged; the new deﬁnition is
+Φ
+∆
+= InitΦ ∧ ✷(M∨ ((x′ =x)∧(y′ =y))) (10)
+We now introduce notation that makes it easy to ensure that a formula allows
+stuttering steps. Two ordered pairs are equal iﬀ their components are equal, so the
+conjunction (x
+′ =x)∧(y′ =y) is equivalent to the single equality⟨x′,y′⟩ =⟨x,y⟩.
+The deﬁnition of priming a state function (formula (3)) allows us to write⟨x′,y′⟩
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 11 ---
+
+The Temporal Logic of Actions · 11
+as⟨x,y⟩′ (Note 7). For any actionAand state functionf,w el e t
+[A]f
+∆
+= A∨(f′ =f) (11)
+(The action [A]f is readsquare A subf.) Then
+[M]⟨x, y⟩ ≡M∨ (⟨x,y⟩′ =⟨x,y⟩)
+≡M∨ ((x′ =x)∧(y′ =y))
+and we can rewrite (10) as
+Φ
+∆
+= InitΦ ∧✷[M]⟨x, y⟩ (12)
+We deﬁne TLA to be the temporal logicwhose elementaryformulas are predicates
+and formulas of the form✷[A]f,w h e r eA is an action andfa state function.
+Since these formulas are RTLA formulas, we have already deﬁned their semantic
+meanings.
+5.2 Adding Liveness
+The formula Φ deﬁned by (12) allows behaviors that start withInit
+Φ true (xand
+yboth zero) and never changexory. Such behaviors do not represent acceptable
+executions of Program 1, so we must strengthen Φ to disallow them.
+Formula Φ of (12) asserts that a behavior may not start in any state other than
+one satisfyingInitΦ and may never take any step other than a [M]⟨x, y⟩ step. An
+assertion that something may never happen is called asafety property. An assertion
+that something eventually does happen is called aliveness property. (Safety and
+liveness have been deﬁned formally by Alpern and Schneider [1985].) The formula
+Init
+Φ ∧✷[M]⟨x, y⟩ is a safety property. To complete the description of Program 1,
+we need an additional liveness property asserting that the program keeps going.
+By Dijkstra’s semantics for hisdo construct, the liveness property for Program 1
+should assert only that the program never terminates. In other words, Dijkstra
+would require that a behavior must contain inﬁnitely many steps that incrementx
+ory. This property is expressed by the RTLA formula✷✸M, which asserts that
+there are inﬁnitely manyM steps. Dijkstra would have us deﬁne Φ by
+Φ
+∆
+= InitΦ ∧ ✷[M]⟨x, y⟩ ∧ ✷✸M (13)
+However, the example becomes more interesting if we add the fairness requirement
+that bothxandymust be incremented inﬁnitely often. (Dijkstra’s deﬁnition would
+allow an execution in which one variable is incremented inﬁnitely often while the
+other is incremented only a ﬁnite number of times.) Since we are not fettered by
+the dictates of conventional programming languages, we will adopt this stronger
+liveness requirement. The formula Φ representing the program with this fairness
+requirement is
+Φ
+∆
+= InitΦ ∧ ✷[M]⟨x, y⟩ ∧ ✷✸M 1 ∧ ✷✸M 2 (14)
+Formulas (13) and (14) are RTLA formulas, but not TLA formulas. An actionA
+can appear in a TLA formula only in the form✷[A]f (unlessAis a predicate), so
+✷✸M 1 and✷✸M 2 are not TLA formulas. We now rewrite them as TLA formulas.
+LetAbe any action andfany state function. Then¬Ais also an action, so
+¬✷[¬A]f is a TLA formula. Applying our deﬁnitions gives
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 12 ---
+
+12 · Leslie Lamport
+¬✷[¬A]f ≡ ✸¬[¬A]f by (7), which implies¬✷...≡✸¬...
+≡ ✸¬(¬A∨(f′ =f)) by (11)
+≡ ✸(A∧(f′ ̸=f)) by simple logic
+We deﬁne the action⟨A⟩f (readangle A subf)b y
+⟨A⟩f
+∆
+= A∧(f′ ̸=f) (15)
+The calculation above shows that✸⟨A⟩f equals¬✷[¬A]f,s oi ti saT L Af o r m u l a
+(Note 8).
+Since incrementing a variable changes its value, bothM 1 andM 2 imply⟨x,y⟩′ ̸=
+⟨x,y⟩ (Note 9). Hence,M 1 is equivalent to⟨M 1⟩⟨x, y⟩,a n dM 2 is equivalent to
+⟨M 2⟩⟨x, y⟩. We can therefore rewrite Φ as a TLA formula as follows.
+Φ
+∆
+= InitΦ ∧ ✷[M]⟨x, y⟩ ∧ ✷✸⟨M 1⟩⟨x, y⟩ ∧ ✷✸⟨M 2⟩⟨x, y⟩ (16)
+5.3 Fairness
+Using arbitrary liveness properties like✷✸⟨M 1⟩⟨x, y⟩ to express fairness require-
+ments is dangerous because it can add unexpected safety properties. For example,
+conjoining the liveness property✷✸(x= 0), which asserts thatxinﬁnitely often
+equals 0, toInitΦ ∧✷[M]⟨x, y⟩ implies the additional safety property that the value
+ofxnever changes. Accidentally adding safety properties in this way is a common
+source of errors in temporal logic speciﬁcations. We avoid such errors by expressing
+liveness in terms of fairness.
+Fairness means that if a certain operation is possible, then the program must
+eventually execute it. The fairness requirements for concurrent algorithms can be
+expressed in terms ofweak fairness andstrong fairness conditions. We ﬁrst deﬁne
+weak and strong fairness informally, then translate the informal deﬁnitions into
+TLA formulas.
+Weak fairness asserts that an operation must be executed if it remains possible
+to do so for a long enough time. “Long enough” means until the operation is
+executed, so weak fairness asserts that eventually the operation must either be
+executed or become impossible to execute—perhaps only brieﬂy. A naive temporal
+logic translation is
+weak fairness:( ✸ executed)∨( ✸ impossible)
+Strong fairness asserts that the operation must be executed if it is often enough
+possible to do so. Interpreting “often enough” to mean inﬁnitely often, strong
+fairness asserts that either the operation is eventually executed, or its execution is
+not inﬁnitely often possible. Not inﬁnitely often possible is the same as eventually
+always impossible (because (7) implies¬✷✸...≡✸✷¬...), so we get
+strong fairness:( ✸ executed)∨( ✸✷impossible)
+These two temporal formulas assert fairness at “time zero”, but we want fairness
+to hold at all times. The correct formulas are therefore
+weak fairness: ✷(( ✸ executed)∨( ✸ impossible))
+strong fairness: ✷(( ✸ executed)∨( ✸✷impossible))
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 13 ---
+
+The Temporal Logic of Actions · 13
+Temporal logic reasoning, using either the axioms in Section 5.6 or the semantic
+deﬁnitions of✷ and✸, shows that these conditions are equivalent to
+weak fairness:( ✷✸executed)∨( ✷✸impossible)
+strong fairness:( ✷✸executed)∨( ✸✷impossible)
+To formalize these deﬁnitions, we must deﬁne “executed” and “impossible”.
+In Program 1, execution of the operationx:=x+1 corresponds to anM 1 step
+in the behavior. To obtain a TLA formula, the “✸ executed” for this operation
+must be expressed as✸⟨M 1⟩⟨x, y⟩. In general, “✸ executed” will be expressed as
+✸⟨A⟩f,w h e r eAis the action that corresponds to an execution of the operation,
+andfis ann-tuple of relevant variables. Recall that an⟨A⟩f step is anAstep
+that changes the value off. Steps that do not change the values of any relevant
+variables might as well not have occurred, so there is no need to consider them as
+representing operation executions.
+We now deﬁne “impossible”. Executing an operation means taking an⟨A⟩f
+step for some actionAand state functionf. It is possible to take such a step iﬀ
+Enabled ⟨A⟩f is true. Thus,Enabled ⟨A⟩f asserts that it is possible to execute the
+operation represented by the action⟨A⟩f, so “impossible” is¬Enabled ⟨A⟩f.W e a k
+fairness and strong fairness are therefore expressed by the two formulas
+WF f(A)
+∆
+=( ✷✸⟨A⟩f)∨( ✷✸¬Enabled ⟨A⟩f) (17)
+SFf(A)
+∆
+=( ✷✸⟨A⟩f)∨( ✸✷¬Enabled ⟨A⟩f) (18)
+Since✸✷Fimplies✷✸Ffor anyF, the strong fairness condition SFf(A) implies
+the weak fairness condition WFf(A).
+The pair of formulasInit∧✷[N]v,Fis said to bemachine closed if conjoiningF
+toInit ∧✷[N]v introduces no additional safety properties. (In this case, we often
+say thatInit ∧✷[N]v ∧Fis machine closed.) We avoid accidentally adding safety
+properties by writing machine-closed speciﬁcations. It can be shown that ifFis
+the conjunction of fairness conditions of the form WFf(A) and/or SFf(A), where
+each⟨A⟩f impliesN,t h e nInit ∧✷[N]v ∧Fis machine closed [Abadi and Lamport
+1992].
+5.4 Rewriting the Fairness Requirement
+We now rewrite the property✷✸⟨M 1⟩⟨x, y⟩ ∧✷✸⟨M 2⟩⟨x, y⟩ in terms of fairness
+conditions. An⟨M 1⟩⟨x, y⟩ step is one that incrementsxby one, leavesyun-
+changed, and changes the value of⟨x,y⟩. It is always possible to take a step
+that adds one toxand leavesyunchanged, and adding one to a number changes
+it. Hence,Enabled ⟨M 1⟩⟨x, y⟩ equalstrue throughout any execution of Program 1
+(Note 10). Since✷¬true equalsfalse,b o t hW F⟨x, y⟩(M 1) and SF⟨x, y⟩(M 1)e q u a l
+✷✸⟨M 1⟩⟨x, y⟩. Similarly, WF⟨x, y⟩(M 2) and SF⟨x, y⟩(M 2) both equal✷✸⟨M 2⟩⟨x, y⟩.
+We can therefore rewrite the deﬁnition (16) of Φ as shown in Figure 3.
+Suppose we wanted the weaker liveness condition that execution never termi-
+nates, so the program is described by the RTLA formula (13). The same argu-
+ment as forM 1 andM 2 shows that✷✸⟨M⟩ ⟨x, y⟩ equals WF⟨x, y⟩(M). Therefore,
+Program 1 with this weaker liveness condition is described by the TLA formula
+InitΦ ∧✷[M]⟨x, y⟩ ∧WF ⟨x, y⟩(M).
+The actions⟨M 1⟩⟨x, y⟩,⟨M 2⟩⟨x, y⟩,a n d⟨M⟩ ⟨x, y⟩ all implyM. Hence neither of
+the liveness conditions WF⟨x, y⟩(M 1)∧WF ⟨x, y⟩(M 2)a n dW F⟨x, y⟩(M 1)a d ds a f e t y
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 14 ---
+
+14 · Leslie Lamport
+properties toInitΦ ∧✷[M]⟨x, y⟩.
+5.5 Examining Formula Φ
+TLA formulas that represent programs can always be written in the same form as
+Φ of Figure 3—that is, as a conjunctionInit ∧✷[N]f ∧F,w h e r e
+Init is a predicate specifying the initial values of variables.
+N is the program’snext-state relation, the action whose steps represent execu-
+tions of individual atomic operations.
+f is then-tuple of all ﬂexible variables.
+F is the conjunction of formulas of the form WFf(A) and/or SFf(A), whereA
+is an action representing some subset of the program’s atomic operations.
+We now examine the behaviors that satisfy formula Φ. Let
+((x
+∆
+=7,y
+∆
+=−10,z
+∆
+=“abc”,...))
+denote a statessuch thats[[x]] = 7,s[[y]] =−10, ands[[z]] =“abc”.( T h e “...”
+indicates that the value ofs[[v]] is left unspeciﬁed for all other variablesv.) A
+behaviorthat satisﬁes Φ begins in a state satisfyingInitΦ , and consistsof a sequence
+of [M]⟨x, y⟩ steps—ones that are eitherM steps or else leavexandyunchanged.
+One such behavior is
+(( x
+∆
+=0 ,y
+∆
+=0 ,z
+∆
+=“abc”...))
+(( x
+∆
+=1 ,y
+∆
+=0 ,z
+∆
+=1 4 ...))
+(( x
+∆
+=2 ,y
+∆
+=0 ,z
+∆
+=Nat ...))
+(( x
+∆
+=2 ,y
+∆
+=0 ,z
+∆
+=−20 ...))
+(( x
+∆
+=2 ,y
+∆
+=1 ,z
+∆
+=
+√
+2 ...))
+...
+Observe that Φ constrains only the values ofxandy; it allows all other variables
+such aszto assume completely arbitrary values. Suppose Ψ is a formula describing
+a program that has no variables in common with Φ. Then a behavior satisﬁes Φ∧Ψ
+iﬀ it represents an execution of both programs—that is, iﬀ it describes a universe
+in which both Φ and Ψ are executed concurrently. Thus, Φ∧Ψi st h eT L Af o r m u l a
+representing the parallel composition of the two programs.
+In general, parallel composition is represented in TLA by conjunction. For ex-
+ample, let
+Φ
+1
+∆
+=(x=0 )∧ ✷[M 1]x ∧WF x(M 1)
+Φ2
+∆
+=(y=0 )∧ ✷[M 2]y ∧WF y(M 2)
+Init Φ
+∆
+=( x =0 ) ∧ (y =0 )
+M 1
+∆
+=( x′ = x +1 ) ∧ (y′ = y) M 2
+∆
+=( y′ = y+1 ) ∧ (x′ = x)
+M
+∆
+= M 1 ∨M 2
+Φ
+∆
+= InitΦ ∧ ✷[M ]⟨x, y⟩ ∧ WF ⟨x, y⟩(M 1) ∧ WF ⟨x, y⟩(M 2)
+Fig. 3. The TLA formula Φ describing Program 1.
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 15 ---
+
+The Temporal Logic of Actions · 15
+A straightforward calculation shows that [M 1]x ∧[M 2]y is equivalent to [M]⟨x, y⟩,
+and temporal logic reasoning (using the axioms of Section 5.6) then shows that Φ is
+equivalent to Φ
+1∧Φ2.F o r m u l a sΦ1 and Φ2 arethe speciﬁcationsof the twoprocesses
+forming Program 1. This example illustrates a general method for decomposing the
+speciﬁcation of a multiprocess program as the conjunction of the speciﬁcations of
+its processes [Abadi and Lamport 1993].
+The observation that a single behavior can represent an execution of two or
+more noninteracting programs explains why we represent terminating as well as
+nonterminating executions by inﬁnite behaviors. Termination of a program means
+that it has stopped; it does not mean that the entire universe has come to a halt.
+A terminating execution is represented by a behavior in which eventually all of the
+program’s variables stop changing.
+It is unusual in computer science for the semantics of a formula describing a
+program with variablesxandyto involve other variables such aszthat appear
+nowhere in the program. One of the keys to TLA’s simplicity is that its semantics
+rests on a single, inﬁnite set of variables—not on a diﬀerent set of variables for each
+program. Thus, in TLA as in elementary logic, we can take the conjunctionF∧G
+of any formulasFandG—not just of formulas with properly matching variable
+declarations.
+5.6 Simple TLA
+We now complete the deﬁnition ofSimple TLA by adding one more bit of nota-
+tion. (The full logic, containing quantiﬁcation, is introduced in Section 8.) It is
+convenient to deﬁne the actionUnchangedf,f o rfa state function, by
+Unchangedf
+∆
+= f′ =f
+Thus, anUnchangedfstep is one in which the value offdoes not change.
+The syntax and semantics of Simple TLA, along with the additional notation we
+use to write TLA formulas, are all summarized in Figure 4. This ﬁgure explains all
+you need to know to understand TLA formulas such as formula Φ of Figure 3.
+A logic contains not only syntax and semantics, but also rules for proving theo-
+rems. Figure 5 lists all the axioms and proof rules we need for proving simple TLA
+formulas.3
+The rules of simple temporal logic are used to derive temporal tautologies—
+formulas that are true regardless of the meanings of their elementary formulas.
+Rule STL1 encompasses the rules of ordinarylogic, such asmodus ponens(Note 11).
+The Lattice Rule assumes a (possibly inﬁnite) setS and a mapping that assigns a
+TLA formulaHc to each elementc ofS. A partial order≻ onS iswell-founded
+iﬀ there exists no inﬁnite descending chainc1 ≻ c2 ≻ ...with all theci inS.
+This rule permits the formalization of counting-down arguments, such as the ones
+traditionally used to prove termination of sequential programs.
+Rules STL1–STL6, the Lattice Rule, and the basic rules TLA1 and TLA2 form a
+relatively complete proof system for reasoning about algorithms in TLA. Roughly
+speaking, this means that every valid TLA formula that we must prove to verify
+properties of algorithms would be provable from these rules if we could prove all
+3A proof ruleF, G
+H asserts that⊢ F and⊢ G imply⊢ H . We use the term “rule” for both axioms
+a n dp r o o fr u l e s ,s i n c ea na x i o mm a yb ev i e w e da sap r o o fr u l ew i t hn oh y p o t h e s e s .
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 16 ---
+
+16 · Leslie Lamport
+Syntax
+⟨formula⟩
+∆
+= ⟨predicate⟩| ✷[⟨action⟩]⟨state function ⟩ |¬ ⟨formula⟩
+|⟨ formula⟩∧⟨ formula⟩| ✷ ⟨formula⟩
+⟨action⟩
+∆
+= boolean-valued expression containing constant symbols,
+variables, and primed variables
+⟨predicate⟩
+∆
+= ⟨action⟩ with no primed variables| Enabled ⟨action⟩
+⟨state function ⟩
+∆
+= nonboolean expression containing constant symbols and variables
+Semantics
+s[[f]]
+∆
+= f(∀‘v’:s[[v]]/v) σ[[F ∧ G]]
+∆
+= σ[[F]]∧ σ[[G]]
+s[[A]]t
+∆
+= A(∀‘v’:s[[v]]/v, t[[v]]/v′) σ[[¬F]]
+∆
+= ¬σ[[F]]
+|= A
+∆
+= ∀s, t∈ St :s[[A]]t |= F
+∆
+= ∀σ ∈ St∞ :σ[[F]]
+s[[Enabled A]]
+∆
+= ∃t∈ St :s[[A]]t
+⟨s0,s1,...⟩[[✷F]]
+∆
+= ∀n ∈ Nat :⟨sn,sn+1 ,...⟩[[F]]
+⟨s0,s1,...⟩[[A]]
+∆
+= s0[[A]]s1
+Additional notation
+p′ ∆
+= p(∀‘v’:v′/v) ✸F
+∆
+= ¬✷¬F
+[A]f
+∆
+= A∨ (f′ = f) F ❀ G
+∆
+= ✷(F ⇒ ✸G)
+⟨A⟩f
+∆
+= A∧ (f′ ̸= f)W F f(A)
+∆
+= ✷✸⟨A⟩f ∨ ✷✸¬Enabled ⟨A⟩f
+Unchanged f
+∆
+= f′ = f SFf(A)
+∆
+= ✷✸⟨A⟩f ∨ ✸✷¬Enabled ⟨A⟩f
+where f is a⟨state function ⟩ s,s0,s1,...are states
+A is an⟨action⟩ σ is a behavior
+F andG are⟨formula⟩s( ∀‘v’:.../ v , .../ v′) denotes substitution
+p is a⟨state function ⟩ or⟨predicate⟩ for all variablesv
+Fig. 4. Simple TLA.
+valid action formulas. (This is analogous to the traditional relative completeness
+resultsfor programveriﬁcation, which assumeprovabilityofall valid predicates[Apt
+1981].) A more precise statement of this result is given in Section 8.3.2 below
+(Note 12).
+A complete proof system is not necessarily a convenient one. For practical rea-
+soning, STL1–STL6 should be augmented with some useful temporal tautologies
+like
+⊢ ( ✷F)∧( ✸G) ⇒ ✸(F∧G)
+With practice, such simple tautologies become as obvious as the ordinary laws of
+propositionallogic. They are usually takenfor grantedin hand proofs, and practical
+decision procedures exist for checking them mechanically [Burch et al. 1992]. The
+temporal operators✷, ✸,a n d❀ are standard [Manna and Pnueli 1991], so we will
+not discuss the rules of simple temporal logic.
+Assuming simple temporal reasoning, we have found that TLA2 and the “addi-
+tional rules” INV1–SF2 of Figure 5 provide a convenient system for all the proofs
+that arise in reasoning about programs with TLA. The overbars in rules WF2 and
+SF2 are explained in Section 8.3.3; for now, the reader can pretend that they are
+not there, obtaining special cases of the rules.
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 17 ---
+
+The Temporal Logic of Actions · 17
+The Rules of Simple T emporal Logic
+STL1.F provable by
+propositional logic
+✷F
+STL4.F ⇒ G
+✷F ⇒ ✷G
+STL2. ⊢ ✷F ⇒ F STL5. ⊢ ✷(F ∧ G) ≡ (✷F) ∧(✷G)
+STL3. ⊢ ✷✷F ≡ ✷F STL6. ⊢ (✸✷F) ∧ (✸✷G) ≡ ✸✷(F ∧ G)
+LATTICE.≻ a well-founded partial order on a setS
+F ∧(c ∈ S) ⇒ (H c ❀ (G ∨∃ d ∈ S :(c ≻ d) ∧ H d))
+F ⇒ ((∃c ∈ S :H c) ❀ G)
+The Basic Rules of TLA
+TLA1.P ∧(f′ = f) ⇒ P ′
+✷P ≡ P ∧ ✷[P ⇒ P ′]f
+TLA2.P ∧[A]f ⇒ Q ∧[B]g
+✷P ∧ ✷[A]f ⇒ ✷Q ∧ ✷[B]g
+Additional Rules
+INV1.I ∧[N ]f ⇒ I′
+I ∧ ✷[N ]f ⇒ ✷I
+INV2. ⊢ ✷I ⇒ (✷[N ]f ≡ ✷[N∧ I ∧ I′]f)
+WF1 .
+P ∧[N ]f ⇒ (P ′ ∨ Q ′)
+P ∧⟨ N ∧A ⟩ f ⇒ Q ′
+P ⇒ Enabled ⟨A⟩f
+✷[N ]f ∧WF f(A) ⇒ (P ❀ Q )
+WF2.
+⟨N ∧ B⟩ f ⇒⟨
+ M⟩
+ g
+P ∧ P ′ ∧⟨ N ∧A ⟩ f ∧
+ Enabled ⟨M⟩ g ⇒B
+P ∧
+ Enabled ⟨M⟩ g ⇒ Enabled ⟨A⟩f
+✷[N∧ ¬ B]f ∧WF f(A) ∧ ✷F
+∧ ✸✷
+Enabled ⟨M⟩ g ⇒ ✸✷P
+✷[N ]f ∧WF f(A) ∧ ✷F ⇒
+ WF g(M )
+SF1.
+P ∧[N ]f ⇒ (P ′ ∨ Q ′)
+P ∧⟨ N ∧A ⟩ f ⇒ Q ′
+✷P ∧ ✷[N ]f ∧ ✷F ⇒ ✸Enabled ⟨A⟩f
+✷[N ]f ∧SFf(A) ∧ ✷F ⇒ (P ❀ Q )
+SF2.
+⟨N ∧ B⟩ f ⇒⟨
+ M⟩
+ g
+P ∧ P ′ ∧⟨ N ∧A ⟩ f ⇒B
+P ∧
+ Enabled ⟨M⟩ g ⇒ Enabled ⟨A⟩f
+✷[N∧ ¬ B]f ∧SFf(A) ∧ ✷F
+∧ ✷✸
+Enabled ⟨M⟩ g ⇒ ✸✷P
+✷[N ]f ∧SFf(A) ∧ ✷F ⇒
+ SFg(M )
+where F,G,H c are TLA formulasP,Q ,I are predicates
+A,B,N ,M are actionsf,g are state functions
+Fig. 5. The axioms and proof rules of Simple TLA.
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 18 ---
+
+18 · Leslie Lamport
+The validity of these rules can be proved rigorously with the raw logic RTLA.
+Rules STL1–STL6 are valid whenFandGare arbitrary RTLA formulas, not just
+TLA formulas. The validity of TLA1–SF2 can be proved using STL1–STL6 and
+the RTLA rule✷P≡P∧✷(P⇒P′). The validity of this rule follows easily from
+the semantic deﬁnitions of✷ and′ (prime). We leave the rigorous proofs as an
+exercise for the reader; instead, we give informal justiﬁcations. Sections 6 and 7
+illustrate how the rules are used.
+Rule TLA1 provides an induction principle for proving the formula✷P.I ta s s e r t s
+the obvious fact that a predicatePis always true iﬀPholds initially and every
+step starting withPtrue leavesPtrue.
+Rule TLA2 follows immediately from the validity of STL4 and STL5 for RTLA
+formulas. (We have to use RTLA because✷(P∧[A]f) is not a TLA formula.)
+Rule INV1 is used to prove that a program satisﬁes an invariance property✷I.
+The hypothesis asserts that a [N]f step cannot falsifyI. The conclusion asserts the
+obvious consequence that ifIis true initially and every step is a [N]f step, thenI
+is always true.
+Rule WF1 is used to deduce a leads-to propertyP❀ Qfrom a weak fairness
+condition WFf(A) . I tc a nb ea p p l i e dw h e na nA step that starts withPtrue
+makesQtrue. To prove the validity of the conclusion, we assume that every step
+is a [N]f step and that WFf(A) holds, and we proveP❀ Q. It suﬃces to derive
+a contradiction by assuming thatPis true at some timenandQis false then and
+at all later times. Since every step is a [N]f step andQis false from timenon,
+the ﬁrst hypothesis implies thatPis true from timenon. The third hypothesis
+then implies thatEnabled ⟨A⟩f is true from timenon. Hence, WFf(A) implies
+that inﬁnitely manyAsteps occur. Any such step occurring after timenstarts
+withPtrue, and the second hypothesis implies that the step makesQtrue. This
+contradicts the assumption thatQremains false after timen, proving the validity
+of the rule.
+Rule WF2 is used to deduce one weak fairnesscondition from another. We deduce
+WF g(M)f r o mW Ff(A) by ﬁnding an actionBsuch that everyBstep is anM
+step and, ifM remains forever enabled, then eventually everyAstep is aBstep.
+(We ignore the overbars.) To prove the validity of WF2, we ﬁrst observe that since
+WF
+g(M)e q u a l s✷✸¬Enabled ⟨M⟩ g ∨✷✸⟨M⟩ g and✸ equals¬✷¬,w ec a nr e w r i t e
+the conclusion as follows.
+✷[N]f ∧WF f(A)∧✷F∧✸✷Enabled ⟨M⟩ g ⇒ ✷✸⟨M⟩ g
+It therefore suﬃces to obtain a contradiction by assuming that✷[N]f ∧WF f(A)∧
+✷F∧✸✷Enabled ⟨M⟩ g holds and only ﬁnitely many⟨M⟩ g steps occur. Since [N]f∧
+⟨B⟩f equals⟨N ∧ B⟩f, it follows from the ﬁrst hypothesis that only ﬁnitely many
+⟨B⟩f steps can occur. Hence, there must eventually be a time after which no more
+⟨B⟩f steps occur, so every further step is a [N∧¬B]f step. By the fourth hypothesis,
+there must then be a time at whichPbecomes true forever. The third hypothesis
+then implies thatEnabled ⟨A⟩f eventually becomes true forever, so WFf(A) implies
+that there are inﬁnitely many⟨A⟩f steps. The second hypothesis then implies that
+there are inﬁnitely many⟨B⟩f steps, which is the required contradiction.
+Rules SF1 and SF2 are the analogs of WF1 and WF2 for strong fairness. We
+omit their justiﬁcations, which are similar to those of WF1 and WF2.
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 19 ---
+
+The Temporal Logic of Actions · 19
+6. PROVING SIMPLE PROPERTIES OF PROGRAMS
+Having expressed Program 1 of Figure 1 as the TLA formula Φ of Figure 3, we
+now consider how to express and prove properties of such a program. A property
+is expressed by a TLA formulaF. The assertion “program Φ has propertyF”i s
+expressed in TLA by the validity of the formula Φ⇒F, which asserts that every
+behavior satisfying Φ satisﬁesF. We consider two popular classes of properties,
+invariance and eventuality.
+6.1 Invariance Properties
+6.1.1 Deﬁnition. An invariance property is expressed by a TLA formula✷P,
+wherePis a predicate. Examples of invariance properties include
+partial correctness. Passertsthat if the programhasterminated, then the answer
+is correct.
+deadlock freedom. Passerts that the program is not deadlocked.
+mutual exclusion. Passerts that at most one process is in its critical section.
+Invariance properties are proved with rule INV1 of Figure 5.
+6.1.2 An Example: Type Correctness. One part of the program in Figure 1 does
+not correspond to anything in Figure 3—the type declaration of the variablesx
+andy. Such a declaration is not needed because type-correctness is an invariance
+property of the program, asserting thatxandyare always natural numbers. We
+illustrate invariance proofs by proving type correctness of Program 1. Type cor-
+rectness is expressed formally as Φ⇒ ✷T,w h e r e
+T
+∆
+=( x∈Nat)∧(y∈Nat) (19)
+Rule INV1 tells us that we must prove
+InitΦ ⇒T (20)
+T∧[M]⟨x, y⟩ ⇒T′ (21)
+from which we deduce Φ⇒ ✷Tas follows
+Φ ⇒ InitΦ ∧✷[M]⟨x, y⟩ by deﬁnition of Φ (Figure 3)
+⇒ T∧✷[M]⟨x, y⟩ by (20)
+⇒ ✷T by (21) and INV1
+The proof of (20) is trivial. The proof of (21) is quite simple, but we will sketch it
+to show how the structure of the formulas leads to a natural decomposition of the
+proof. First, we expand the deﬁnition of [M]
+⟨x, y⟩.
+[M]⟨x, y⟩ ≡M ∨(⟨x,y⟩′ =⟨x,y⟩) by (11)
+≡M 1 ∨M2 ∨(⟨x,y⟩′ =⟨x,y⟩) by deﬁnition ofM
+Since [M]⟨x, y⟩ is the disjunction of three actions, the proof of (21) decomposes into
+the proof of three simpler formulas:
+T∧M1 ⇒ T′ (22)
+T∧M2 ⇒ T′ (23)
+T∧(⟨x,y⟩′ =⟨x,y⟩) ⇒ T′ (24)
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 20 ---
+
+20 · Leslie Lamport
+We consider the proof of (22); the others are equally simple. First, we expand the
+deﬁnition ofT′.
+T′ ≡ ((x∈Nat)∧(y∈Nat))′ by (19)
+≡ (x′ ∈Nat)∧(y′ ∈Nat)b y ( 3 )
+The structure ofT′ as the conjunction of two actions leads to the decomposition of
+the proof of (22) into the proof of the two simpler formulas
+T∧M1 ⇒ x′ ∈Nat (25)
+T∧M1 ⇒ y′ ∈Nat (26)
+The proof of (25) is
+T∧M1 ⇒ (x∈Nat)∧(x′ =x+1) by deﬁnition ofTandM 1
+⇒ x′ ∈Nat by properties of natural numbers
+and the proof of (26) is equally trivial.
+The purpose of this exercise in simple mathematics is to illustrate how “mechan-
+ical” the proof of this invariance property is. Rule INV1 tells us we must prove
+(20) and (21), and the structure of [M]⟨x, y⟩ andTleads to the decomposition of
+those proofs into the veriﬁcation of simple facts about natural numbers, such as
+(x∈Nat)⇒ (x+1 ∈Nat).
+6.1.3 General Invariance Proofs. The proof of Φ⇒ ✷Twas simple becauseTis
+aninvariant of the action [M]⟨x, y⟩, meaning thatT∧[M]⟨x, y⟩ impliesT′.T h e r e -
+fore, Φ⇒ ✷Tcould be proved by simply substitutingTforIin rule INV1. For
+invariance properties✷Pother than simple type correctness,Pis usually not an
+invariant. In general, one proves that✷Pis an invariance property of the program
+represented by the TLA formulaInit ∧✷[N]f ∧Fby ﬁnding a predicateI(the
+invariant) satisfying the three conditions
+Init ⇒I (27)
+I⇒P (28)
+I∧[N]f ⇒I′ (29)
+Rule INV1 and some simple temporal reasoning shows that (27)–(29) implyInit ∧
+✷[N]f ⇒ ✷P.
+Creativethoughtis needed to ﬁnd the invariantI.O n c eIis found, verifying (27)–
+(29) is a matter of mechanically applying the deﬁnitions and using the structure
+of the formulas to decompose the proofs, just as in the proof of Φ⇒ ✷Tabove.
+The formulasInit,I,a n dN will usually be much more complicated than in the
+example, but the principle is the same.
+Formulas (27)–(29)are assertions about predicates and actions; they are not tem-
+poral formulas. All the work in proving an invariance property is done in the realm
+of predicates and actions—expressionsinvolving variablesand primed variables that
+can be manipulated by ordinary mathematics. Temporal reasoning is used only to
+deduceInit ∧✷[N]
+f ⇒ ✷Pfrom (27)–(29). TLA is practical because it minimizes
+temporal reasoning, relying on ordinary, nontemporal reasoning whenever possible.
+6.1.4 More About Invariance Proofs. Over the years, many methods have been
+proposed for proving invariance properties of programs, including Floyd’s method
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 21 ---
+
+The Temporal Logic of Actions · 21
+[Floyd 1967], Hoare logic [Hoare 1969], and the Owicki-Gries method [Owicki 1975].
+All of these methods are essentially the same—when applied to the same program,
+they involve the same proof steps, though perhaps in diﬀerent orders and with
+diﬀerent notation. These methods can be described formally in TLA as applications
+of rule INV1. The advantage of TLA is that the proof method arises directly from
+the logic, without the need for proof rules based on a particular programming
+language.
+We illustrate the advantage of working in a simple logic by considering the use
+of one invariance property to prove another. We have just proved Φ⇒ ✷T,t h e
+assertion that the program satisﬁes the invariance property✷T.H o wc a nw eu s e
+this fact when proving that the program satisﬁes a second invariance property✷P?
+Some methods have a special rule saying that if a program satisﬁes✷T, then one
+can pretend thatTis true when reasoning about the program. (The “substitution
+axiom” of Unity [Chandy and Misra 1988] is such a rule.) In TLA, we use Rule
+INV2 of Figure 5. This rule implies that having proved Φ⇒ ✷T,w ec a nr e w r i t e
+the deﬁnition of Φ in Figure 3 as
+Φ
+∆
+= InitΦ ∧ ✷[M∧T∧T′]⟨x, y⟩ ∧WF ⟨x, y⟩(M 1) ∧WF ⟨x, y⟩(M 2)
+It follows that in proving Φ implies✷P, instead of assuming every step to be a
+[M]⟨x, y⟩ step, we can make the stronger assumption that every step is a [M∧T∧
+T′]⟨x, y⟩ step. More precisely, we can substituteM∧T∧T′ instead ofM forN
+in rule INV1, giving a stronger proof rule. This stronger rule is tantamount to
+“pretendingTis true”. The validity of this pretense follows directly from the logic;
+it is not an ad hoc rule.
+6.1.5 More About Types. In TLA, variables have no types. Any variable can
+assume any value. Type-correctness of a program is a provable property, not a
+syntactic requirement as in strongly-typed programming languages. This has some
+subtle consequences. Consider the actionx
+′ =x+ 1. Its meaning is a boolean-
+valued function on pairs of states. Supposesandtare states that assign the values
+“abc” and 17 tox, respectively—that is, sos[[x]] equals“abc” andt[[x]] equals 17.
+Thens[[x′ =x+1] ]tequals 17 =“abc” +1 . B u tw h a ti s“abc” + 1?Does it equal
+17?
+We don’t know the answers to these questions, and we don’t care. All we know
+is that“abc” + 1 is some value. Since that value is either equal to or unequal to
+17, the expression 17 =“abc”+1 is equal to eithertrue orfalse. More precisely, we
+assume thatm + n is a value, for any valuesm andn. However, we have no rules
+for deducing anything about the value ofm+ n except whenm andn are numbers.
+In general, we assume that all operators such as + aretotal—they are deﬁned
+on all possible values. What we usually think of as the domain of an operator is
+just the set of values for which we know how to evaluate the operator. We know
+how to evaluatem + n only whenm andn are numbers, but it is deﬁned (in the
+mathematical sense of being a meaningful expression) for all valuesm andn.
+Since we can’t deduce anything about the value“abc” + 1, whatever we prove
+about an algorithm is true regardless of what that value is. If we can prove that
+the program is correct, then either it will never add 1 to“abc” (as in the case of
+Program 1), or else correctness does not depend on the result of that addition.
+This approach may seem strange to computer scientists used to types in pro-
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 22 ---
+
+22 · Leslie Lamport
+gramming languages, but it captures the way mathematicians have reasoned for
+thousands of years. For example, mathematicians would say that the formula
+( n ∈Nat)⇒ ( n+1 >n) (30)
+is true for alln. Substituting“abc” forn yields
+( “abc” ∈Nat)⇒ ( “abc” +1 >“abc”)
+This formula is true regardless of what“abc” + 1 equals, and whether or not that
+value is greater than“abc”, because“abc” ∈Nat is false (Note 13). The formula
+is not meaningless or “type-incorrect” just because we don’t know the value of
+“abc” +1.
+There is one subtle pitfall raised by the absence of types in TLA. It is tempting to
+think that we can replacex
+′ =x+1byx=x′ −1 in the TLA formula Φ describing
+Program 1. However, these two expressions need not be equivalent unlessxandx′
+are both numbers. For example, ifxequals 16, thenx′ =x+ 1 is true only ifx′
+equals 17. However, we don’t know what“abc” −1 equals, so it might equal 16.
+Hence, the formula 16 =x′ −1m i g h tb et r u ew h e nx′ equals“abc” as well as when
+x′ equals 17. We could not prove the property Φ⇒ ✷(x∈Nat) if we replaced
+x′ =x+1b yx=x′ −1 in the deﬁnition of Φ.
+We can avoid this pitfall by writing actions as conjunctions and disjunctions of
+formulas of the formv′ =eandv′ ∈e,w h e r evis a variable andea state function.
+The absence of types then produces no surprises. Moreover, actions written in this
+form have the advantage of being easier to understand, since they express the new
+values of variables directly in terms of their old values.
+We could deﬁne a typed version of TLA. Semantically, we just restrict the
+collection of states to ones that assign to each variable a value of the proper type.
+However, types add a great deal of complexity to a logic. For example, what is
+the type of the division operator?If it isReal ×NonzeroReal → Real,t h e nt y p e
+correctness becomes undecidable, so we lose automatic type checking, arguably the
+major beneﬁt of types. If the type isReal×Real → Real, then what is the value of
+1/0?Ifitisarealnumber, thenwewillbe abletoprovethe correctnessofalgorithms
+that we would usually consider to be incorrect, such as an iterative algorithm that
+takes 1/0 as an initial approximation. Letting 1/0 be a special “undeﬁned” value
+⊥leads to a complicated logic with truth valuestrue, false,a n d⊥.
+The type of an operator like division is just one of many problems introduced by
+types. These problems are easily hidden in informal presentation such as ours and
+the ones in most articles and books—for example, [Manna and Pnueli 1991] and
+[Chandy and Misra 1988]. The problems cannot be avoided in a formal treatment,
+such as is necessary for true mechanical veriﬁcation. (They can be hidden when
+mechanically checking hand-translated veriﬁcation conditions). Although one can
+formalize a typed version of TLA, the result is not nearly so simple as the untyped
+version. Types may be good for programming languages, but we believe that the
+diﬃculties they add far outweigh their advantages in a logic for reasoning about
+algorithms (Note 14).
+6.2 Eventuality Properties
+The second class of properties we consider are eventuality properties—ones as-
+serting that something eventually happens. Here are some traditional eventuality
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 23 ---
+
+The Temporal Logic of Actions · 23
+properties and their expressions in temporal logic:
+termination. The program eventually terminates:✸ terminated.
+service. If a process has requested service, then it eventually is served:
+requested ❀ served.
+message delivery. If a message is sent often enough, then it is eventually
+delivered: (✷✸sent)⇒ ✸ delivered.
+Although eventuality properties are expressed by a variety of temporal formulas,
+their proofs can always be reduced to the proof of leads-to properties—formulas of
+the formP❀ Q. For example, suppose we want to prove that Program 1 increases
+the value ofxwithout bound. The TLA formula to be proved is
+Φ∧( n ∈Nat) ⇒ ✸(x>n) (31)
+The Lattice Rule of Figure 5 together with some simple temporal reasoning shows
+that (31) follows from
+Φ ⇒ (( n ∈Nat ∧x=n) ❀ (x=n+ 1)) (32)
+To illustrate the use of TLA in proving leads-to properties, we now sketch the proof
+of (32).
+Since safety properties don’t imply that anything ever happens, leads-to prop-
+erties must be derived from the program’s fairness condition. Examining Figure 5
+leads us to try rule WF1, with the following substitutions:
+P← n ∈Nat ∧x=n N←M f←⟨x,y⟩
+Q←x=n+ 1 A←M 1
+The rule’s hypotheses become
+( n ∈Nat ∧x=n)∧[M]⟨x, y⟩ ⇒ (( n ∈Nat ∧x′ =n)∨(x′ =n+1) )
+( n ∈Nat ∧x=n)∧⟨M1⟩⟨x, y⟩ ⇒ (x′ =n+1)
+( n ∈Nat ∧x=n) ⇒ Enabled ⟨M 1⟩⟨x, y⟩
+which follow easily from the deﬁnitions ofM 1 andM in Figure 3. The rule’s
+conclusion becomes
+✷[M]⟨x, y⟩ ∧WF ⟨x, y⟩(M 1) ⇒ (( n ∈Nat ∧x=n) ❀ (x=n+1) )
+which, by deﬁnition of Φ, implies (32).
+6.3 Other Properties
+We have seen how invariance properties and eventuality properties are expressed
+as TLA formulas and proved. But, what about more complicated properties?How
+would one state the following property as a TLA formula?
+A behavior begins withxandyboth zero, and repeatedly increments
+eitherxory(in a single operation), choosing nondeterministically be-
+tween them, but choosing each inﬁnitely many times.
+The answer, of course, it that we already have expressed this property in TLA. It
+is formula Φ of Figure 3.
+In TLA, there is no distinction between a program and a property. Instead of
+viewing Φ as a description of a program, we can just as well consider it to be a
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 24 ---
+
+24 · Leslie Lamport
+var integer x,y =0;
+semaphore sem =1;
+cobegin loop α1: ⟨ P(sem) ⟩ ;
+β1: ⟨ x := x +1 ⟩ ;
+γ1: ⟨ V (sem) ⟩ endloop
+loop α2: ⟨ P(sem) ⟩ ;
+β2: ⟨ y := y+1 ⟩ ;
+γ2: ⟨ V (sem) ⟩ endloop
+coend
+Fig. 6. Program 2—our second example program.
+property that we want a program to satisfy. The formula Φ, like the program of
+Figure 1 that it represents, is so simple that we can regard it as a speciﬁcation of
+how we want a program to behave. As our next example, we consider a program
+that implements property Φ. That is, we give a program represented by a TLA
+formula Ψ that implies Φ.
+7. ANOTHER EXAMPLE
+7.1 Program 2
+Our next example is Program 2 of Figure 6, written in a language invented for
+this program. (Since its only purpose is to help us write the TLA formula, the
+programming-language description of the program can be written with any conve-
+nient notation.) The program consists of two processes, each repeatedly execut-
+ing a loop that contains three atomic operations. The variablesem is an integer
+semaphore, andPandVare the standard semaphore operations [Dijkstra 1968].
+Since Figure 6 is an informal description, it doesn’t matter whether or not you
+understand it. The real deﬁnition of Program 2 is the TLA formula Ψ deﬁned
+below.
+Describing the execution of Program 2 as a sequence of states requires each state
+to specify not only the values of the variablesx,y,a n dsem, but also the control
+state of each process. Control in process 1 can be at one of the three “control
+points”α
+1,β1,o rγ1. We introduce the variablepc1 that will assume the values
+“a”, “b”,a n d“g”, denoting that control is atα1,β1,a n dγ1, respectively. A similar
+variablepc2 denotes the control state of process 2.
+The deﬁnition of the TLA formula Ψ that represents Program 2 is given in
+Figure7 .4 Averticallyalignedlistofformulasprecededby “∧”sor“∨”sdenotesthe
+conjunction or disjunction of those formulas, and we use indentation to eliminate
+parentheses. (These notational conventions make large formulas much easier to
+read.) Thus, Figure 7 deﬁnes the predicateInit
+Ψ to be the conjunction of three
+formulas, the second of which is (x=0 )∧(y=0 ) .
+As we explained in Section 5.5, a program is represented by a formulaInit ∧
+✷[N]f ∧F.I nt h i se x a m p l e ,Init andfare fairly obvious:Init is the predicateInitΨ
+that speciﬁes the initial values of the variables, andfis the 5-tuplewconsisting of
+all the program’s variables. The next-state relationN and the fairness requirement
+Fare less obvious and merit some discussion.
+4Section 9.2 discusses why Figure 7 is longer and seems more complex than Figure 6.
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 25 ---
+
+The Temporal Logic of Actions · 25
+Init Ψ
+∆
+= ∧ (pc1 = “a”) ∧ (pc2 = “a”)
+∧ (x =0 ) ∧ (y =0 )
+∧ sem =1
+α1
+∆
+= ∧ (pc1 = “a”) ∧(0 < sem)
+∧ pc′
+1 = “b”
+∧ sem′ = sem − 1
+∧ Unchanged ⟨x, y,pc2⟩
+α2
+∆
+= ∧ (pc2 = “a”) ∧(0 < sem)
+∧ pc′
+2 = “b”
+∧ sem′ = sem − 1
+∧ Unchanged ⟨x, y,pc1⟩
+β1
+∆
+= ∧ pc1 = “b”
+∧ pc′
+1 = “g”
+∧ x′ = x +1
+∧ Unchanged ⟨y,sem,pc2⟩
+β2
+∆
+= ∧ pc2 = “b”
+∧ pc′
+2 = “g”
+∧ y′ = y+1
+∧ Unchanged ⟨x,sem,pc1⟩
+γ1
+∆
+= ∧ pc1 = “g”
+∧ pc′
+1 = “a”
+∧ sem′ = sem +1
+∧ Unchanged ⟨x, y,pc2⟩
+γ2
+∆
+= ∧ pc′
+2 = “a”
+∧ pc2 = “g”
+∧ sem′ = sem +1
+∧ Unchanged ⟨x, y,pc1⟩
+N 1
+∆
+= α1 ∨ β1 ∨ γ1 N 2
+∆
+= α2 ∨ β2 ∨ γ2
+N
+∆
+= N 1 ∨N 2
+w
+∆
+= ⟨x, y,sem,pc1,pc2⟩
+Ψ
+∆
+= InitΨ ∧ ✷[N ]w ∧ SFw(N 1) ∧SFw(N 2)
+Fig. 7. The formula Ψ describing Program 2.
+7.1.1 The Next-State Relation. Corresponding to the six atomic operations in
+Figure 6 are the six actionsα1,...,γ2 deﬁned in Figure 7. The four conjuncts in
+the deﬁnition ofα1 assert that anα1 step:
+(1) Starts in a state withpc1 =“a” (control in the ﬁrst process is at control point
+α1)a n d0<sem (the semaphore is positive).
+(2) Ends in a state withpc1 =“b” (control in the ﬁrst process is at control point
+β1).
+(3) Decrementssem.
+(4) Does not change the values ofx,y,a n dpc2
+Thus, anα1 step represents an execution of statementα1 of Figure 6. Similarly,
+the other actions represent the other operations of the program in Figure 6.
+AnN1 step is either anα1 step, aβ1 step, or aγ1 step, so it represents an exe-
+cution of an atomic operation by the ﬁrst process. Similarly, anN2 step represents
+an execution of an atomic operation by the second process. AnN step represents
+a step of either process, so every program step is anN step—in other words,N is
+the program’s next-state relation. Thus,✷[N]w is true for a behavior iﬀ every step
+of the behavior is either a program step or else leaves the variablesx,y, sem, pc1,
+andpc2 unchanged.
+7.1.2 The Fairness Requirement. We want program Ψ to implement program Φ.
+Hence, Ψ must guarantee that bothxandyare incremented inﬁnitely often. To
+guarantee thatxis incremented inﬁnitely often, we need some fairness requirement
+to ensure that inﬁnitely manyN1 steps occur. This requirement must rule out the
+following behavior, in which process 1 is never executed.
+((x
+∆
+=0,y
+∆
+=0, sem
+∆
+=1, pc1
+∆
+=“a”, pc2
+∆
+=“a”,...))
+((x
+∆
+=0,y
+∆
+=0, sem
+∆
+=0, pc1
+∆
+=“a”, pc2
+∆
+=“b”,...))
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 26 ---
+
+26 · Leslie Lamport
+((x
+∆
+=0,y
+∆
+=1, sem
+∆
+=0, pc1
+∆
+=“a”, pc2
+∆
+=“g”,...))
+((x
+∆
+=0,y
+∆
+=1, sem
+∆
+=1, pc1
+∆
+=“a”, pc2
+∆
+=“a”,...))
+((x
+∆
+=0,y
+∆
+=1, sem
+∆
+=0, pc1
+∆
+=“a”, pc2
+∆
+=“b”,...))
+((x
+∆
+=0,y
+∆
+=2, sem
+∆
+=0, pc1
+∆
+=“a”, pc2
+∆
+=“g”,...))
+((x
+∆
+=0,y
+∆
+=2, sem
+∆
+=1, pc1
+∆
+=“a”, pc2
+∆
+=“a”,...))
+...
+Observe that anα1 step is possible iﬀpc1 equals“a” andsem is positive, so
+Enabled α1 equals (pc1 = “a”)∧(0<sem). In this behavior,Enabled α1 is true
+wheneverpc2 equals“a”, and false otherwise—both situations occurring inﬁnitely
+often. Anα1 step is also anN1 step. Moreover, everyα1 step changespc1 and
+sem, so it changesw. Hence, anyα1 step is an⟨N1⟩w step, so⟨N1⟩w is enabled
+and disabled inﬁnitely often in this behavior.
+The weak fairness condition WFw(N1) asserts that⟨N1⟩w is disabled inﬁnitely
+often or inﬁnitely many⟨N1⟩w steps occur. Since⟨N1⟩w is disabled inﬁnitely often,
+WF w(N1) does not rule out this behavior.
+The strong fairness condition SFw(N1) asserts that either⟨N1⟩w is eventually
+forever disabled or else inﬁnitely many⟨N1⟩w steps occur. Neither assertion is true
+for this behavior, so the behavior does not satisfy SFw(N1). This example indicates
+why we need the fairness condition SFw(N1)t og u a r a n t e et h a txis incremented
+inﬁnitely often.
+There are other ways of writing this fairness condition. An equivalent deﬁnition
+of Ψ is obtained by replacing SFw(N1)w i t hS Fw(α1)∧SFw(β1)∧SFw(γ1)o rw i t h
+SFw(α1)∧WF w(β1)∧WF w(γ1). Equivalence of these deﬁnitions follows from the
+formulas
+InitΨ ∧✷[N]w ⇒ (SFw(N1) ≡ SFw(α1)∧SFw(β1)∧SFw(γ1)) (33)
+InitΨ ∧✷[N]w ⇒ (SFw(β1)≡WF w(β1)) (34)
+InitΨ ∧✷[N]w ⇒ (SFw(γ1)≡WF w(γ1)) (35)
+Intuitively, (33) holds because once control reachesα1,β1,o rγ1, it remains there
+until the corresponding action is executed; (34) holds because once control reaches
+β
+1,a c t i o nβ1 is enabled until it is executed; and (35) is similar to (34).
+Corresponding reasoning aboutyandN2 leads to the fairness condition SFw(N2)
+for the second process.
+7.2 Proving Program 2 Implements Program 1
+To show that Program 2 implements Program 1, we must prove the TLA formula
+Ψ ⇒ Φ, where Ψ is deﬁned in Figure 7 and Φ is deﬁned in Figure 3. By these
+deﬁnitions, Ψ⇒ Φ follows from the following three formulas.
+InitΨ ⇒ InitΦ (36)
+✷[N]w ⇒ ✷[M]⟨x, y⟩ (37)
+Ψ ⇒ WF ⟨x, y⟩(M 1)∧WF ⟨x, y⟩(M 2) (38)
+Formula (36) asserts that the initial condition of Ψ implies the initial condition
+of Φ. It follows easily from the deﬁnitions ofInitΨ andInitΦ.
+Roughly speaking, formula (37) asserts that everyN step simulates anM step,
+and (38) asserts that Program 2 implements Program 1’s fairness conditions. We
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 27 ---
+
+The Temporal Logic of Actions · 27
+now sketch the proofs of these two formulas.
+7.2.1 Proof of Step-Simulation. Applying rule TLA2 of Figure 5 withtrue sub-
+stituted forPandQshows that (37) follows from
+[N]w ⇒ [M]⟨x, y⟩ (39)
+By deﬁnition, [N]w equalsα1∨...∨γ2∨(w′ =w)a n d[M]⟨x, y⟩ equalsM 1∨M2∨
+(⟨x,y⟩′ =⟨x,y⟩). Formula (37) therefore follows from
+α1 ⇒⟨ x,y⟩′ =⟨x,y⟩ α2 ⇒⟨ x,y⟩′ =⟨x,y⟩
+β1 ⇒M 1 β2 ⇒M 2
+γ1 ⇒⟨ x,y⟩′ =⟨x,y⟩ γ2 ⇒⟨ x,y⟩′ =⟨x,y⟩
+(w′ =w) ⇒⟨ x,y⟩′ =⟨x,y⟩
+(40)
+These implications are all trivial consequences of the deﬁnitions.
+7.2.2P r o o fo fF a i r n e s s .For the fairness requirement (38), we sketch the proof
+that Ψ implies WF⟨x, y⟩(M 1). The proof that it implies WF⟨x, y⟩(M 2) is similar.
+Strong fairness of Program2 is necessary to insure thatxis incremented inﬁnitely
+often, so Figure 5 suggests applying SF2 (without the overbars). At ﬁrst glance,
+SF2 doesn’t seem to work because its conclusion implies a strong fairness condition,
+and we want to prove Ψ⇒ WF ⟨x, y⟩(M 1). However, ifxis a natural number, so
+x′ ̸=x+1 ,t h e nEnabled ⟨M 1⟩⟨x, y⟩ equalstrue. A simple invariance argument
+proves Ψ⇒ ✷(x∈Nat), so Ψ⇒ ✷( Enabled ⟨M 1⟩⟨x, y⟩). Hence, Ψ implies that
+SF⟨x, y⟩(M 1)a n dW F⟨x, y⟩(M 1) are equivalent—both being equal to✷✸⟨M 1⟩⟨x, y⟩.
+We can thus expect to prove Ψ⇒ SF⟨x, y⟩(M 1), which implies Ψ⇒ WF ⟨x, y⟩(M 1).
+Comparing the conclusion of rule SF2 with the formula we are trying to prove
+apparently leads to the following substitutions in the rule.
+N←N M←M 1 f←wg ←⟨x,y⟩
+However, it turns out that we need to strengthenN by the use of an invariant. We
+must ﬁnd a predicateI(an invariant) that satisﬁes
+InitΨ ∧✷[N]w ⇒ ✷I (41)
+By rule INV2, we can then rewrite Ψ as
+InitΨ ∧ ✷[N∧I∧I′]w ∧SFw(N1) ∧SFw(N2)
+and substituteN∧I∧I′ forN. We will discover the invariantIin the course of
+the proof.
+The ﬁrst hypothesis of the rule and (40) suggest substitutingβ1 forB.T h e
+conclusion and the second hypothesis leads to the substitution ofN1 forAand
+SFw(N2)f o r✷F, using the temporal tautology SFw(N2)≡✷SFw(N2). The second
+and fourth hypotheses lead to the substitution ofpc1 = “b” forP.W i t h t h e s e
+substitutions, the proof rule becomes
+⟨N ∧I∧I′ ∧β1⟩w ⇒⟨ M 1⟩⟨x, y⟩
+( pc1 =“b”)∧( pc′
+1 =“b”)∧⟨N∧I∧I′ ∧N1⟩w ⇒ β1
+( pc1 =“b”)∧Enabled ⟨M 1⟩⟨x, y⟩ ⇒ Enabled ⟨N1⟩w
+✷[N∧I∧I′ ∧¬β1]w ∧SFw(N1)∧SFw(N2)∧✷✸Enabled ⟨M 1⟩⟨x, y⟩
+⇒ ✸✷( pc1 =“b”)
+✷[N∧I∧I′]w ∧SFw(N1)∧SFw(N2) ⇒ SF⟨x, y⟩(M 1)
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 28 ---
+
+28 · Leslie Lamport
+The ﬁrst three hypotheses are simple action formulas. The second and third
+follow easily from the deﬁnitions ofN1,β1 andM 1. To prove the ﬁrst hypothesis,
+we must show thatN∧I∧I′ ∧β1 ∧(w′ ̸=w) impliesM 1 ∧(⟨x,y⟩′ ̸=⟨x,y⟩). As
+we observed in (40),β1 impliesM 1.S i n c eβ1 also impliesx′ =x+1, which implies
+x′ ̸=xifxis a natural number, the ﬁrst hypothesis holds if the invariantIimplies
+x∈Nat.
+The fourth hypothesis is a temporal formula, which we now examine. To sim-
+plify the intuitive reasoning, let us ignore steps that don’t changew. The fourth
+hypothesis then asserts that if every step is anN∧I∧I′ step that is not aβ1 step,
+and the fairness conditions hold, then eventually control reachesβ1 and remains
+there forever. From the informal description of the program in Figure 6, this seems
+valid. No matter where control starts in process 1, fairness implies that eventually
+it must reachβ1, where it must remain forever if noβ1 step is performed.
+Unfortunately, this intuitive reasoning is wrong. The fourth hypothesis is not a
+valid TLA formula. For example, consider a behavior that starts in a state with
+pc1 = pc2 = “a” andsem = 0, and that remains in this state forever. In such
+a behavior, the left-side of the implication in the fourth hypothesis is true, but
+pc1 never becomes equal to“b”. Thus, the hypothesis is not satisﬁed by these
+behaviors.
+The fourth hypothesis is invalid for behaviors starting in “bad” states—ones
+that are not reachable by executing the program from an initial state satisfying
+Init
+Ψ . Such states have to be ruled out by the invariantI. We must substitute
+SFw(N2)∧✷Ifor✷F(using the tautology SFw(N2)∧✷I≡ ✷(SFw(N2)∧I)) and
+( pc1 =“b”)∧IforPin Rule SF2, obtaining the following as the fourth hypothesis.
+G⇒ ✸✷(( pc1 =“b”)∧I)
+whereG
+∆
+= ✷[N∧I∧I′ ∧¬β1]w ∧SFw(N1)∧SFw(N2) ∧ ✷I
+∧✷✸Enabled ⟨M 1⟩⟨x, y⟩
+(42)
+Remembering thatImust implyx∈ Nat, the reader with experience reasoning
+about concurrent programs will discover that the appropriate invariant is
+I
+∆
+= ∧x∈Nat
+∧∨ ( sem =1 )∧( pc1 =pc2 =“a”)
+∨( sem =0 )∧∨ ( pc1 =“a”)∧( pc2 ∈{“b”,“g”})
+∨( pc2 =“a”)∧( pc1 ∈{“b”,“g”})
+With this deﬁnition ofI, the invariance property (41) follows easily from Rule
+INV1.
+Having deduced that we need to prove (42), we must understand why it is true.
+A little thought reveals that (42) holds because control in process 1 must eventually
+reachβ1,a n d✷[N...∧¬β1]w, which asserts that aβ1 action is never executed,
+implies that control must then remain there forever. This reasoning is formalized
+by applying simple temporal reasoning based on the Lattice Rule to derive (42)
+from:
+G⇒ (( pc1 =“g”)∧I❀ ( pc1 =“a”)∧I) (43)
+G⇒ (( pc1 =“a”)∧I❀ ( pc1 =“b”)∧I) (44)
+G⇒ (( pc1 =“b”)∧I⇒ ✷(( pc1 =“b”)∧I)) (45)
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 29 ---
+
+The Temporal Logic of Actions · 29
+To see how to prove these formulas, we once again use simple pattern matching
+against the proof rules of Figure 5. We ﬁnd that (43) and (44) should be proved
+by Rule SF1 withN
+1 substituted forAand SFw(N2) substituted for✷F,a n dt h a t
+(45) should be proved by rule INV1 with (pc1 = “b”)∧Isubstituted forI.T h e
+proofs of (43) and (45) are simple. The proof of (44) is not so easy, the hard part
+being the proof of the third hypothesis:
+H⇒ ✸Enabled ⟨N
+1⟩w
+whereH
+∆
+= ✷(( pc1 =“a”)∧I) ∧✷[N∧I∧I′ ∧¬β1]w ∧SFw(N2)
+(46)
+Once again, we have reached a point where blind application of rules fails; we must
+understand why (46) is true. Ifpc1 equals“a”,t h e na c t i o nN1 is enabled when
+control in process 2 is atα2, and strong fairness forN2 implies that control must
+eventually reachα2. This intuitive reasoning leads us to deduce (46) by temporal
+reasoning from
+( pc1 =“a”)∧I⇒ ( Enabled ⟨N1⟩w ≡( pc2 =“a”))
+H⇒ (( pc2 =“b”) ❀ ( pc2 =“g”))
+H⇒ (( pc2 =“g”) ❀ ( pc2 =“a”))
+The ﬁrst formula follows from the observation that
+Enabled ⟨N1⟩w ≡ (( pc1 =“a”)∧(0<sem))∨( pc1 =“b”) ∨( pc1 =“g”)
+Pattern matching against the proof rules leads to simple proofs of the remaining
+two formulas by substitutingN2 forAandtrue forFin SF1.
+7.3 Comments on the Proof
+This example illustrates the general method of proving that a lower-level program
+Ψ implements a higher-level program Φ. There are three things to prove: (i) the
+initial predicate of Ψ implies the initial predicate of Φ, (ii) a step of Ψ simulates a
+step of Φ, and (iii) Ψ implies the fairness requirement of Φ.
+As in the example, proving the initial condition is generally straightforward. Of
+course, in more realistic examples there will be more details to check.
+Because our example was so simple, the proof of step-simulation was atypical.
+Usually, a step of the lower-level program starting in a completely arbitrary state
+does not simulate a step of the higher-level program. We must ﬁrst ﬁnd the proper
+invariant, and then apply Rule INV2 to prove step-simulation. Once the invariant
+is found, the proof is a straightforward exercise in showing that one action implies
+another. The structure of the formulas tells us how to decompose a large proof into
+a number of smaller ones.
+Our proof of fairness was quite typical in its alternation of blind application of
+proof rules with the need to understand why a property holds. As in this proof,
+an invariant is almost always required. Usually, it is the same invariant as in the
+proof of step-simulation. Of course, the proofs of real algorithms will be more
+complicated.
+Ourproofmayalreadyhaveseemedrathercomplicatedfor suchasimple example,
+but the example is a bit more subtle than it appears. The reader who attempts
+a rigorous informal proof will discover that each step in the TLA proof mirrors a
+step in the informal proof. The more rigorous the informal proof, the more it will
+resemble the TLA proof. Rules SF1 and SF2 conveniently encapsulate reasoning
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 30 ---
+
+30 · Leslie Lamport
+that occurs over and over again in informal proofs. We believe that temporal logic
+provides an ideal formalism for translating intuitive understanding of why a liveness
+property holds into a formal proof.
+Were we to choose the weaker fairness requirement WF
+⟨x, y⟩(M) for Program 1,
+then Program 2’s fairness requirement could be weakened to WFw(N). The proof
+of Ψ⇒ Φ, using WF2 instead of SF2, would then be simpler. Writing out this
+proof is a good exercise in applying TLA.
+7.4 Stuttering and Reﬁnement
+Program 2 isﬁner grained than Program 1, in the sense that the three atomic oper-
+ations of each process’s loop in Program 2 correspond to a single atomic operation
+of Program 1. Besides the steps that incrementxory, Program 2 takes steps that
+modifysem andpc1 orpc2, but leavexandyunchanged. Program 2 implements
+Program 1—that is, the formula Ψ⇒ Φ is valid—only because Φ allows stuttering
+steps that do not changexandy. Program 2 can in turn be implemented by a
+still ﬁner-grained program because Ψ allows steps that do not change any of its
+variables. Allowing stuttering steps is the key to reﬁning the grain of atomicity.
+8. HIDING VARIABLES
+8.1 A Memory Speciﬁcation
+We now consider another example: a simple processor/memory interface. The
+processor issuesread andwrite operations that are executed by the memory. The
+interface consists of three registers, represented by the following three variables.
+op Set by the processorto indicate the desired operation, and reset by the memory
+after executing the operation.
+adr Set by the processor to indicate the address of the memory location to be read
+or written.
+val Set by the processor to indicate the value to be written by awrite,a n ds e tb y
+the memory to return the result of aread.
+Here is a typical behavior, where “—” indicates that the value is irrelevant, and
+memory location 432 happens to have the initial value 777.
+(( op
+∆
+= “ready”, adr
+∆
+=—, val
+∆
+=—, ...))
+(( op
+∆
+= “read”, adr
+∆
+= 432,val
+∆
+=—, ...))
+(( op
+∆
+= “ready”, adr
+∆
+=—, val
+∆
+= 777,...))
+(( op
+∆
+= “write”, adr
+∆
+= 196,val
+∆
+=0 , ...))
+(( op
+∆
+= “ready”, adr
+∆
+=—, val
+∆
+=—, ...))
+..
+.
+It is easy to specify this interface if we introduce an additional variablememory
+to denote the contents of memory, somemory(n) is the current value of memory
+locationn. The property Φ describing the desired behaviors is shown in Figure 8,
+whereAddress is the set of legal addresses, andMemVal is the set of possible mem-
+ory values. ActionS(m,v) represents the assignmentmemory(m): =v(Note 15).
+ActionsR
+proc andWproc represent the processor’sread-a n dwrite-request opera-
+tions; actionsRmem andWmem representthe memory’s responses to those requests.
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 31 ---
+
+The Temporal Logic of Actions · 31
+InitΦ
+∆
+= ∧ op = “ready”
+∧∀ n ∈ Address :memory(n) ∈ MemVal
+S(m, v)
+∆
+= ∀n ∈ Address :∧ (n = m ) ⇒ (memory(n)′ = v)
+∧ (n ̸= m ) ⇒ (memory(n)′ = memory(n))
+R proc
+∆
+= ∧ op = “ready”
+∧ op′ = “read”
+∧ adr ′ ∈ Address
+∧ memory′ = memory
+R mem
+∆
+= ∧ op = “read”
+∧ op′ = “ready”
+∧ val′ = memory(adr)
+∧ memory′ = memory
+W proc
+∆
+= ∧ op = “ready”
+∧ op′ = “write”
+∧ adr ′ ∈ Address
+∧ val′ ∈ MemVal
+∧ memory′ = memory
+W mem
+∆
+= ∧ op = “write”
+∧ op′ = “ready”
+∧S (adr ,val)
+N mem
+∆
+= R mem ∨W mem
+N
+∆
+= N mem ∨R proc ∨W proc
+w
+∆
+= ⟨op,adr ,val,memory⟩
+Φ
+∆
+= InitΦ ∧ ✷[N ]w ∧ WF w(N mem)
+Fig. 8. “Internal” speciﬁcation of a processor/memory interface.
+ActionNmem denotes the memory’s next-state relation. The fairness condition
+WF w(Nmem) asserts that the memory eventually responds to each request; there
+is no requirement that the processor ever issues requests.
+Observe that the actionS(m,v) is used only to deﬁneWmem; it was introduced
+just to keep the deﬁnition ofWmem from running oﬀ the page. There is no formal
+signiﬁcance to our choice of names such asRproc. Our decision to deﬁneNmem
+as the disjunction of two simpler actions was completely arbitrary; we could just
+as well have deﬁned it all at once, or as the disjunction of more than two actions.
+There are countless ways of writing logically equivalent formulas Φ.
+The formula Φ speciﬁes the right behavior for the interface variablesop, adr,
+andval. However, it also speciﬁes the value of the variablememory,w h i c hw e
+did not want to specify. We want to specify only how the three interface variables
+change; we do not care how any other variables such asx, sem,o rmemory change.
+We therefore want a formula asserting thatop, adr,a n dval behave as described
+by Φ, but that it doesn’t matter what valuesmemory assumes. Such a formula
+is sometimes described as Φ with the variablememory “hidden”. This formula is
+written∃∃∃∃∃∃memory :Φ .
+The precise meaning of the formula∃∃∃∃∃∃memory : Φ is deﬁned below. Here, we
+simply want to observe that the free (ﬂexible) variables of this formula areop,
+adr,a n dval.S i n c ex, sem,a n dmemory do not occur free, the formula does not
+constrain them in any way.
+8.2 Quantiﬁcation over Flexible Variables
+We now deﬁne∃∃∃∃∃∃x:F,w h e r exis a (ﬂexible) variable andFat e m p o r a lf o r m u l a .
+Intuitively,∃∃∃∃∃∃x:Fasserts that it doesn’t matter what the actual values ofxare,
+but that there are some valuesxcan assume for whichFholds. For example,
+∃∃∃∃∃∃x: ✷[y=x
+′]⟨x, y⟩ is satisﬁed by the behavior
+((x
+∆
+=“a”, y
+∆
+=0 ,z
+∆
+=“uvw”,...))
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 32 ---
+
+32 · Leslie Lamport
+((x
+∆
+=“b”, y
+∆
+=1 ,z
+∆
+=−13, ...))
+((x
+∆
+=“c”, y
+∆
+=1 ,z
+∆
+=−13, ...))
+((x
+∆
+= 77, y
+∆
+=2 ,z
+∆
+=“vw”,...))
+...
+because by changing only the values ofx, we get the following behavior that satisﬁes
+✷[y=x′]⟨x, y⟩.
+((x
+∆
+=“a”, y
+∆
+=0 ,z
+∆
+=“uvw”,...))
+((x
+∆
+=0 , y
+∆
+=1 ,z
+∆
+=−13, ...))
+((x
+∆
+=1 , y
+∆
+=1 ,z
+∆
+=−13, ...))
+((x
+∆
+=1 , y
+∆
+=2 ,z
+∆
+=“vw”,...))
+..
+.
+In fact, every behavior satisﬁes∃∃∃∃∃∃x: ✷[y=x
+′]⟨x, y⟩.
+To deﬁne∃∃∃∃∃∃x:Fformally, we need some auxiliary deﬁnitions. For any variable
+x and statessandt,l e ts=x tmean thatsandtassign the same values to all
+variables other thanx. More precisely,
+s=x t
+∆
+= ∀‘v’̸=‘x’:s[[v]] =t[[v]]
+We extend the relation =x to behaviors in the obvious way:
+⟨s0,s1,...⟩ =x ⟨t0,t1,...⟩
+∆
+= ∀n ∈Nat :sn =x tn
+The obvious next step is to deﬁne
+σ[[∃∃∃∃∃∃x:F]]
+∆
+= ∃τ∈St∞ :(σ=x τ)∧τ[[F]] (47)
+for any behaviorσ. (Recall thatSt∞ is the collection of all behaviors.) However,
+this deﬁnition is not quite right, because the formula it deﬁnes is not necessarily
+invariant under stuttering. For example, supposeFis satisﬁed only by behaviors
+in whichxchanges beforeydoes, including the behavior
+((x
+∆
+=1,y
+∆
+=“a”,z
+∆
+=7,...))
+((x
+∆
+=2,y
+∆
+=“a”,z
+∆
+=7,...))
+((x
+∆
+=2,y
+∆
+=“b”,z
+∆
+=1 4,...))
+...
+Then deﬁnition (47) implies that the behavior
+((x
+∆
+= 999,y
+∆
+=“a”,z
+∆
+=7,...))
+((x
+∆
+= 999,y
+∆
+=“a”,z
+∆
+=7,...))
+((x
+∆
+= 999,y
+∆
+=“b”,z
+∆
+=1 4,...))
+..
+.
+satisﬁes∃∃∃∃∃∃x:F(because we can produce a behavior satisfyingFby changing only
+the values ofx). However, the behavior
+((x
+∆
+= 999,y
+∆
+=“a”,z
+∆
+=7,...))
+((x
+∆
+= 999,y
+∆
+=“b”,z
+∆
+=1 4,...))
+...
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 33 ---
+
+The Temporal Logic of Actions · 33
+does not satisfy∃∃∃∃∃∃x:F(because of the assumption thatFrequiresxto change
+beforeydoes). With appropriate values for all other variables, these two behaviors
+diﬀer only by stuttering steps. Hence, with deﬁnition (47),∃∃∃∃∃∃x:Fis not necessarily
+invariant under stuttering even thoughFis.
+To obtain invariance under stuttering, we must deﬁne∃∃∃∃∃∃x:Fto be satisﬁed by
+ab e h a v i o rσiﬀ we can obtain a behavior that satisﬁesFby ﬁrst adding stuttering
+and then changing the values ofx. We deﬁne♮σto be the behavior obtained from
+the behaviorσby removing all stuttering steps—except that ifσends with inﬁnite
+stuttering, then those ﬁnal stuttering steps are kept. The precise deﬁnition is:
+♮⟨s0,s1,s2,...⟩
+∆
+= if ∀n ∈Nat :sn =s0
+then ⟨s0,s0,s0,...⟩
+else if s1 =s0 then ♮⟨s1,s2,s3,...⟩
+else ⟨s0⟩◦♮⟨s1,s2,...⟩
+(48)
+where◦denotes concatenation of sequences. We then deﬁne∃∃∃∃∃∃by
+σ[[∃∃∃∃∃∃x:F]]
+∆
+= ∃ρ,τ∈St∞ :(♮σ=♮ρ) ∧(ρ=x τ) ∧τ[[F]] (49)
+The operator∃∃∃∃∃∃xdiﬀers from ordinary existential quantiﬁcation because it as-
+serts the existence not of a single value to be substituted forx, but of an inﬁnite
+sequence of values. However, it really is existential quantiﬁcation because it obeys
+the ordinary laws of existential quantiﬁcation. In particular, the usual rules E1 and
+E2 of Figure 9 are sound. From these rules, one can deduce the expected properties
+of existential quantiﬁcation, such as
+(∃∃∃∃∃∃x:F∨G) ≡ (∃∃∃∃∃∃x:F) ∨(∃∃∃∃∃∃x:G)
+We can extend TLA to allow quantiﬁcation over rigid as well as ﬂexible variables.
+Since the value of a rigid variable is constant throughout a behavior, quantiﬁca-
+tion over rigid variables is much simpler than quantiﬁcation over ﬂexible variables
+(Note 16). However, it is of less use. The semantics of quantiﬁcation over rigid
+variables is deﬁned in Figure 9.
+General TLA formulas consist of all formulas obtained from simple TLA formulas
+by logicaloperatorsandquantiﬁcationoverprogramandrigidvariables. The syntax
+and semantics of quantiﬁcation are summarized in Figure 9, which together with
+Figure 4 gives the complete deﬁnition of TLA. It is easy to check that TLA formulas
+are invariant under stuttering, which means formally that♮σ=♮τimpliesσ[[F]] =
+τ[[F]] for all TLA formulasFand behaviorsσandτ.
+8.3 Reﬁnement Mappings
+8.3.1 Implementing The Memory Speciﬁcation. We now give a simple implemen-
+tation of the processor/memory interface speciﬁed by the formula∃∃∃∃∃∃memory :Φ ,
+where Φ is deﬁned in Figure 8. The implementation uses a main memory and a
+cache, represented by variablesmain andcache.T h ev a l u eo fcache(m)r e p r e s e n t s
+the cache’s value for memory locationm, the special value⊥(assumed not to be in
+MemVal) denoting that this memory location is not in the cache. The processor’s
+read and write requests are serviced from the cache, and separate internal actions
+(not visible from the interface) move values between the cache and main memory.
+When the processor reads a value not in the cache, the value is ﬁrst moved into the
+cache and then put inval.
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 34 ---
+
+34 · Leslie Lamport
+Syntax
+⟨general formula ⟩
+∆
+= ⟨formula⟩| ∃∃∃∃∃∃⟨ variable⟩ :⟨general formula ⟩
+|∃ ⟨ rigid variable ⟩ : ⟨general formula ⟩
+|⟨ general formula ⟩∧⟨ general formula ⟩
+|¬ ⟨general formula ⟩
+⟨formula⟩
+∆
+= a simple TLA formula (see Figure 4)
+Semantics
+⟨s0,s1,...⟩ = x ⟨t0,t1,...⟩
+∆
+= ∀ n ∈ Nat :∀‘v’̸=‘x’:sn[[v]] =tn[[v]]
+♮⟨s0,s1,s2,...⟩
+∆
+= if ∀n ∈ Nat :sn = s0
+then ⟨s0,s0,s0,...⟩
+else if s1 = s0 then ♮⟨s1,s2,s3,...⟩
+else ⟨s0⟩◦ ♮⟨s1,s2,...⟩
+σ[[∃∃∃∃∃∃ x :F]]
+∆
+= ∃ ρ, τ∈ St∞ :(♮σ = ♮ρ) ∧ (ρ = x τ) ∧ τ[[F]]
+σ[[∃ c :F]]
+∆
+= ∃c ∈ Val :σ[[F]]
+Proof Rules
+E 1. ⊢ F(f/ x) ⇒ ∃∃∃∃∃∃ x :FE 2.F ⇒ G
+x does not occur free inG
+(∃∃∃∃∃∃ x :F) ⇒ G
+F1. ⊢ F(e/c) ⇒∃ c :FF 2.F ⇒ G
+c does not occur free inG
+(∃ c :F) ⇒ G
+where x is a⟨variable⟩ F,G are⟨general formula ⟩s
+f is a state functions,s0,t0,s1,t1,...are states
+c is a⟨rigid variable ⟩ σ is a behavior
+e is a constant expression◦denotes concatenation of sequences
+Fig. 9. Quantiﬁcation in TLA.
+The “internal” description, in whichmain andcache are free variables, is the
+formula Ψ of Figure 10. The actions deﬁned in the ﬁgure have the following inter-
+pretations.
+T( a,m,v). Represents the assignmenta(m): =v. This action is introduced only
+to simplify the deﬁnitions of other actions.
+Rpro, Wpro. The processor’sread-a n dwrite-request operations.
+Rcch, Wcch. The memory’s responses to processor requests, the value being read
+from or written to the cache. AnRcch action can be executed only if the value to
+be read is in the cache.
+Cget( m), Cﬂ( m). The internal actions of moving a value from main memory to
+the cache, and of ﬂushing a value from the cache to main memory. The second
+conjunct ofCﬂ( m) prevents a value from being ﬂushed while it is being read. This
+is the only constraint on when values can be moved into or out of the cache; no
+particular cache maintenance policy is speciﬁed.
+P. The next-state relation, which is the disjunction of all possible actions of the
+processor and the memory.
+F. The disjunction of all the memory actions that must be performed to respond
+to a processor request. The third disjunct represents the action of moving the value
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 35 ---
+
+The Temporal Logic of Actions · 35
+InitΨ
+∆
+= ∧ op = “ready”
+∧∀ n ∈ Address :(main(n) ∈ MemVal) ∧ (cache(n)= ⊥ )
+T (a, m, v )
+∆
+= ∀n ∈ Address :∧ (n = m) ⇒ (a′(n)= v )
+∧ (n ̸= m) ⇒ (a′(n)= a(n))
+R pro
+∆
+= ∧ op = “ready”
+∧ op′ = “read”
+∧ adr ′ ∈ Address
+∧ Unchanged ⟨main, cache⟩
+R cch
+∆
+= ∧ op = “read”
+∧ cache(adr ) ̸= ⊥
+∧ op′ = “ready”
+∧ val ′ = cache(adr )
+∧ Unchanged ⟨main, cache⟩
+W pro
+∆
+= ∧ op = “ready”
+∧ op′ = “write”
+∧ adr ′ ∈ Address
+∧ val ′ ∈ MemVal
+∧ Unchanged ⟨main, cache⟩
+W cch
+∆
+= ∧ op = “write”
+∧ op′ = “ready”
+∧T (cache, adr , val )
+∧ Unchanged main
+Cget (m)
+∆
+= ∧ cache(m)= ⊥
+∧T (cache, m, main(m))
+∧ Unchanged ⟨op, adr,
+val , main⟩
+Cﬂ (m)
+∆
+= ∧ cache(m) ̸= ⊥
+∧∨ op ̸= “read”
+∨ m ̸= adr
+∧T (main, m, cache(m))
+∧T (cache, m, ⊥ )
+∧ Unchanged ⟨op, adr , val ⟩
+P
+∆
+= R pro ∨W pro ∨R cch ∨W cch ∨ (∃∃∃∃∃∃ m ∈ Address :Cget (m)∨Cﬂ (m))
+F
+∆
+= R cch ∨W cch ∨ (Cget (adr )∧ (op = “read”))
+u
+∆
+= ⟨op, adr , val , main, cache⟩
+Ψ
+∆
+= InitΨ ∧ ✷[P ]u ∧ WF u(F )
+Fig. 10. A simple cached memory.
+for aread request from main memory into the cache. (It is enabled only if the value
+is not already in the cache.)
+If we considermain andcache to be internal variables, then the cached memory is
+described by the TLA formula5 ∃∃∃∃∃∃main,cache : Ψ. The assertion that the cached
+memory correctly implements the processor/memory interface is expressed by the
+formula
+(∃∃∃∃∃∃main,cache :Ψ ) ⇒ (∃∃∃∃∃∃memory : Φ) (50)
+To prove (50), we deﬁne the state function
+memory by
+memory(m)
+∆
+= if cache(m)=⊥ then main(m)
+else cache(m)
+and then prove Ψ⇒
+ Φ, where
+Φ denotes the formula Φ(
+memory/memory) obtained
+by substituting
+memory for all free occurrences ofmemory in Φ. Applying rule
+E1 of Figure 9, substituting
+memory forfandmemory forx,w eo b t a i nΨ⇒
+∃∃∃∃∃∃memory : Φ. Rule E2 then yields (50).
+5As usual in logic, we write∃∃∃∃∃∃ x, y: F as an abbreviation for∃∃∃∃∃∃ x : ∃∃∃∃∃∃ y : F,w h i c hb yE 1a n dE 2
+of Figure 9 is equivalent to∃∃∃∃∃∃ y :∃∃∃∃∃∃ x :F.
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 36 ---
+
+36 · Leslie Lamport
+The formula Ψ⇒
+ Φ asserts that any sequence of values for the variablesop, adr,
+andval, and for the state function
+memory, that is allowed by Ψ is a sequence of
+values that Φ allows for the variablesop, adr, val,a n dmemory. We can regard
+memory as the “concrete” state function with which Ψ implements the “abstract”
+variablememory.
+How do we prove that Ψ implies
+Φ?To ﬁnd the answer, we examine the structure
+of
+Φ. For any formulaF,l e t
+Fdenote the formulaF(
+ memory/memory) obtained
+by substituting
+memory for all free occurrences ofmemory inF. For example,
+w is the state function⟨op,adr,val,
+memory⟩.T h e n
+Φe q u a l s
+InitΦ ∧ ✷[
+N]
+w ∧
+WF w(Nmem). The formula
+Φ therefore looks much like an ordinary TLA formula
+representing a program, with initial condition
+InitΦ and next-state relation
+N.T h e
+only diﬀerence is that instead of an ordinary weak fairness condition,
+Φ has as a
+conjunct the “barred” fairness condition
+WF w(Nmem).
+The proof of Ψ⇒
+ Φ is similar to the proof in Section 7.2 that Program 2
+implements Program 1. We ﬁrst prove thatInitΨ implies
+InitΦ.W e n e x t p r o v e
+that Ψ implies✷[
+N]
+w (step-simulation) by applying rule TLA2 of Figure 5 with
+the substitutions
+A←P B←
+ N f←ug←
+wP ← true Q← true
+Finally, we prove that Ψ implies
+WF w(Nmem) (fairness) by applying WF2 with the
+substitutions
+M←N mem A←F f←u
+N←P B←R cch ∨Wcch g←w
+P← ( op =“write”) ∨( op =“read” ∧cache( adr)̸=⊥)
+(Observe that Rule WF2 has the appropriate “bars” to prove the desired conclu-
+sion.) As in our previous example, the proofs consist of straightforwardcalculations
+punctuated by the occasional need for insight into why what we are trying to prove
+is true.
+This cached memory is quite abstract; it allows any policy for deciding when
+to move values between the cache and main memory. Given a particular caching
+algorithm, we would prove that it implements the simple cached memory—meaning
+that the TLA formula representing the algorithm implies∃∃∃∃∃∃main,cache :Ψ . B y
+the transitivity of implication, this proves that the algorithm implements the mem-
+ory/processor interface.
+8.3.2Reﬁnement Mappings. It is clear how to generalize the example above to
+the problem of proving
+(∃∃∃∃∃∃x
+1,...,xm :Ψ ) ⇒ (∃∃∃∃∃∃y1,...,yn : Φ) (51)
+for arbitrary Ψ and Φ. We must deﬁne state functions
+y1,...,
+yn in terms of the
+variables that occur in Ψ and prove Ψ⇒
+ Φ, where for any formulaF,w el e t
+F
+denote the formulaF(
+y1/y1,...,
+yn/yn) obtained by substituting
+yi for the free
+occurrences ofyi inF, for alli. We then infer (51) from rules E1 and E2.
+The collection of state functions
+y1,...,
+yn is called areﬁnement mapping.T h e
+“barred variable”
+yi is the state function with which Ψ implements the variableyi
+of Φ.
+To prove (51), one must ﬁnd a reﬁnement mapping such that Ψ⇒
+ Φ is valid,
+and use the rules of Figure 5 to prove its validity. But can the requisite reﬁnement
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 37 ---
+
+The Temporal Logic of Actions · 37
+mapping always be found?Does the validity of (51) imply the existence of a
+reﬁnement mapping such that Ψ⇒
+ Φ is valid?
+The answer is no; a reﬁnement mapping need not exist. As an example, we return
+to Programs 1 and 2, represented by formulas Φ of Figure 3 and Ψ of Figure 7.
+Program 2 permits precisely the same sequences of values forxandyas does
+Program 1. Therefore, the formula∃∃∃∃∃∃sem,pc1,pc2 : Ψ, which describes only the
+sequences of values forxandyallowed by Program 2, is equivalent to Φ. Can we
+prove this equivalence?
+We already sketched the proof of Ψ⇒ Φ, which by Rule E2 implies
+(∃∃∃∃∃∃sem,pc1,pc2 :Ψ )⇒ Φ
+In this case, Φ has no internal variables, so the reﬁnement mapping is the trivial
+one consisting of the empty set of barred variables. Now consider the converse,
+Φ ⇒ (∃∃∃∃∃∃sem,pc1,pc2 : Ψ) (52)
+Can we deﬁne the requisite state functions
+sem,
+ pc1,a n d
+pc2 in terms ofxand
+y(the only variables that occur in Φ) so that Program 1 allows them to assume
+only those sequences of values that Program 2 allows the corresponding variables
+to assume?Clearly not. There is no way to infer from the values ofxandywhat
+the values ofsem, pc1,a n dpc2 should be. Thus, there does not exist a reﬁnement
+mapping for which Φ implies
+Ψ.
+To prove (52), one must modify Φ by addingauxiliary variables.I n t u i t i v e l y ,a n
+auxiliary variable is one that is added to a program without aﬀecting the program’s
+behavior. Formally, adding an auxiliary variabledto a formula Π means ﬁnding a
+formula Πd such that∃∃∃∃∃∃d:Π d is equivalent to Π. (The variabledis assumed not
+to occur free in Π.) Formula (52) can be proved by adding two auxiliary variables
+handpto Φ. That is, we can construct a formula Φhp such that∃∃∃∃∃∃h,p:Φ hp is
+equivalent to Φ, and can then prove
+(∃∃∃∃∃∃h,p:Φhp) ⇒ (∃∃∃∃∃∃sem,pc1,pc2 :Ψ )
+by constructing a reﬁnement mapping such that Φhp implies
+Ψ. The reﬁnement
+mapping can be found because the state functions
+sem,
+ pc1,a n d
+pc2 are allowed
+to depend uponhandpas well asxandy.
+In general, reﬁnement mappings can be found if we add the right auxiliary vari-
+ables. The completeness theorem of Abadi and Lamport [1991] shows that, under
+certain reasonable assumptions about Φ and Ψ, if (51) is valid, then one can in
+principle add auxiliary variables to Φ to obtain the formula Φhp and ﬁnd the req-
+uisite reﬁnement mapping such that Φhp ⇒
+ Ψ is valid. Relative completeness of
+STL1–STL6, the Lattice Rule, TLA1, and TLA2 for simple TLA means that this
+implication is provable from those rules if Φ and Ψ have the formInit∧✷[N]v ∧F,
+whereFis the conjunction of weak and strong fairness formulas, and Φ is ma-
+chine closed. We thus have a relative completeness result for TLA formulas of the
+form (51).
+8.3.3“Barring” Fairness. The “barring” operator denotes substitution of state
+functions
+yi for variablesyi. Barring distributes over most of our operators; for
+example,
+✷(F∨G)e q u a l s✷(
+F∨
+G), for any formulasFandG.T h u s ,w h e nΦh a s
+the canonical formInit ∧✷[N]f ∧F, the formula
+Φe q u a l s
+Init ∧✷[
+N]
+f ∧
+F.I fF
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 38 ---
+
+38 · Leslie Lamport
+is the conjunction of fairness conditions of the form WFg(M) and SFg(M), then
+Fis the conjunction of barred fairness conditions
+WF g(M)a n d
+SFg(M).
+We might expect that
+WF g(M) would be equivalent to WF
+g(
+M)a n d
+SFg(M)
+equivalent to SF
+g(
+M), but that need not be the case. It is true that
+WF g(M) ≡ ✷✸¬
+Enabled ⟨M⟩ g ∨ ✷✸⟨
+M⟩
+ g
+SFg(M) ≡ ✷✸¬
+Enabled ⟨M⟩ g ∨ ✸✷⟨
+M⟩
+ g
+(53)
+However,
+Enabled ⟨M⟩ g is not necessarily equivalent toEnabled ⟨
+M⟩
+ g.F o r e x -
+ample, letM be the action (x′ =x) ∧(y′ ̸=y), letgequal⟨x,y⟩, and let the
+reﬁnement mapping be deﬁned by
+x =zand
+y =z.T h e nEnabled ⟨M⟩ g equals
+∃c, d :( c =x) ∧( d ̸=y), which equalstrue. Hence
+Enabled ⟨M⟩ g, the formula
+obtained by substituting
+xforxand
+yforyinEnabled ⟨M⟩ g,e q u a l strue.B u t
+Enabled ⟨
+M⟩
+ g
+≡ Enabled ⟨
+(x′ =x) ∧(y′ ̸=y)⟩
+⟨x, y⟩ by deﬁnition ofM andg
+≡ Enabled ⟨(
+ x ′ =
+x)∧(
+ y′ ̸=
+y)⟩⟨
+x ,
+y⟩ by deﬁnition of
+...
+≡ Enabled ⟨(z′ =z)∧(z′ ̸=z)⟩⟨z,z⟩ by deﬁnition of
+x and
+y
+≡ Enabled false by deﬁnition of⟨...⟩...
+≡ false by deﬁnition ofEnabled
+Thus,
+Enabled ⟨M⟩ g is not equivalent toEnabled ⟨
+M⟩
+ g. In general, the primed
+variables in the action⟨M⟩ g are not free variables of the expressionEnabled ⟨M⟩ g,
+so we can’t obtain
+Enabled ⟨M⟩ g fromEnabled ⟨M⟩ g by blindly barring all vari-
+ables.
+In rules WF2 and SF2, the formulas
+WF g(M)a n d
+SFg(M) are deﬁned by (53).
+The rules are sound when
+M is any action,
+gany state function, and
+Enabled ⟨M⟩ g
+any predicate—assuming that
+WF g(M)a n d
+SFg(M) are deﬁned by (53). In prac-
+tice, the barredformulaswill be obtained from unbarredones by substituting barred
+variables (state functions) for variables, as in our example.
+9. FURTHER COMMENTS
+9.1 Mechanical Veriﬁcation
+Becauseit is a simple logic, TLA is ideally suited formechanization. Urban Engberg
+and Peter Grønning have been workingon the mechanical veriﬁcation of TLA, using
+LP—an “oﬀ-the-shelf” veriﬁcation system based on rewriting [Garland and Guttag
+1989]. Although initial experiments showed that LP can be used directly, Engberg
+and Grønning decided to develop a system called TLP to translate TLA deﬁnitions
+and proofs into LP input [Engberg et al. 1992] (Note 17). In addition to allowing
+more readablespeciﬁcations, TLP allows separateLP proofs for action formulas and
+temporal formulas, using simpler encodings of the formulas than would be possible
+with a single proof. Since most reasoning in a TLA proof is about actions, a simple
+encoding of actionformulas is important. They also hope to use veriﬁcationsystems
+other than LP to check parts of the proof.
+The proof in Section 7.2, that the formula Ψ describing Program 2 implies the
+formula Φ describing Program 1, has been checked with TLP. Figure 11 shows the
+deﬁnitions of Φ and Ψ in the actual TLP input. (For simplicity, we are omitting
+some declarations and TLP directives.) Observe that these deﬁnitions are almost
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 39 ---
+
+The Temporal Logic of Actions · 39
+InitPhi == (x = 0) /\ (y = 0)
+M1 == (x ′ =x+1 )/ \( y ′ =y )
+M2 == (y ′ =y+1 )/ \( x ′ =x )
+M = = M 1\ /M 2
+v = = ( x*y )
+Phi == InitPhi /\ [][M]_v /\ WF(v,M1) /\ WF(v,M2)
+InitPsi == /\ (pc1 = a) /\ (pc2 = a)
+/ \( x=0 )/ \( y=0 )
+/\ sem = 1
+alpha1 == /\ (pc1 = a) /\ (0 << sem)
+/\ pc1
+′ =b
+/\ sem ′ = sem - 1
+/\ Unchanged(x * y * pc2)
+..
+.
+gamma2 == /\ pc2 = g
+/\ pc2 ′ =a
+/\ sem ′ = sem + 1
+/\ Unchanged(x * y * pc1)
+N1 == alpha1 \/ beta1 \/ gamma1
+N2 == alpha2 \/ beta2 \/ gamma2
+N= = N 1 \ / N 2
+w == (x * y * pc1 * pc2 * sem)
+Psi == InitPsi /\ [][N]_w /\ SF(w,N1) /\ SF(w,N2)
+Fig. 11: The representation of the formulas Φ and Ψ of Figures 3 and 7 for the mechanical
+veriﬁcation of the theorem Ψ⇒ Φ.
+perfect transliterations of the ones in Figures 3 and 7. The major diﬀerences are
+the use of “*”t or e p r e s e n tt u p l e sa n d“<<” instead of “<”—diﬀerences introduced
+because comma and “<” have other meanings.
+Following these deﬁnitions is the statement
+Theorem Psi =>Phi
+that asserts the validity of the temporal formula Ψ⇒ Φ. The rest of the TLP input
+is a hierarchically structured proof of this theorem. TLP translates the deﬁnitions
+and proof into a form that can be checked by LP. The only part of the proof not
+checked by LP is the computation of theEnabled predicates. Although algorithmi-
+cally simple, these computations are awkward to do in LP. We hope that a future
+version of TLP will computeEnabled predicates.
+The work on mechanically verifying TLA formulas is preliminary. So far, only
+simple examples have been completed. The veriﬁcation described above was done
+with an early version of the preprocessor, whose implementation required about
+two man-months of eﬀort. The goal of the project is to assess the feasibility of im-
+plementing a veriﬁcation system that will be useful for real problems. Recent work
+has concentrated on developing a convenient user interface for managing proofs,
+which we feel is a prerequisite for a practical system.
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 40 ---
+
+40 · Leslie Lamport
+9.2 TLA versus Programming Languages
+Let us compare Figure 6, the description of Program 2 in a conventional program-
+ming language, with Figure 7, its representation as a TLA formula. At ﬁrst glance,
+the program looks simpler than the TLA formula. However, the program seems
+simple only because you are already familiar with its notation. To understand
+what the program means, you need to understand the meaning of thevar declara-
+tions, thecobegin, loop, “;”, and “:=” constructs, and thePandVoperations.
+In contrast, everything needed to understand the TLA formula appears in Figure 4.
+It is easy to make something seem simple by omitting the complicated deﬁnitions
+needed to understand it.
+One reason for the conventional program’s apparent simplicity is that it does not
+specify liveness properties. Nothing in Figure 6 told us that the fairness requirement
+for Ψ should be strong fairness (SF
+w(M 1)∧SFw(M 2)) rather than weak fairness
+(WF w(M)). To allow either fairness requirement, a programming language should
+provide diﬀerent ﬂavors ofcobegin and semaphore operations. If the language
+provides only one kind of fairness, specifying a diﬀerent fairness requirement needs
+a complicated encoding with additional variables—if it is even possible.
+The TLA formula can be made shorter and easier to read by introducing some
+simple deﬁnitions. The representation of program control can be encapsulated by
+deﬁningGo(i,d,e) to mean that control in processigoes fromdtoe(Note 18):
+Go(i,d,e)
+∆
+=( pci =d)∧( pc′
+i =e)∧( pc′
+3− i =pc3− i) (54)
+The semaphore operations can be expressed more compactly by deﬁningP( sem)
+to equal (0<sem)∧( sem′ =sem −1) andV( sem)t oe q u a lsem′ =sem +1.The
+deﬁnition of Ψ then appears much simpler; for exampleα1 is deﬁned by
+α1
+∆
+= P( sem)∧Go(1, “a”, “b”)∧Unchanged ⟨x,y⟩
+The ability to use deﬁnitions to simplify formulas makes TLA practical for large
+speciﬁcations.
+There are just two basic reasons why a TLA formula is longer than the corre-
+sponding conventional program: (i) what remains unchanged is implicit in a pro-
+gram statement, but must be stated explicitly in an action deﬁnition; and (ii) how
+the control state changes is implicit in the program, but is described explicitly in
+the formula. We now discuss these two sources of length.
+The explicitUnchanged clauses addonly about10%to the length ofthe deﬁnition
+of Ψ in Figure 7. In larger examples they add less; about 1% of one 700-line TLA
+speciﬁcation consists ofUnchanged clauses. Still, why pay that price?An obvious
+way of simplifying the formulas is to let the omission of a variable from an action
+mean that the variable is left unchanged. Thus,x
+′ =x+1w ouldbeequiv alen tt o
+(x′ =x+1) ∧(y′ =y). However, this “simpliﬁcation” would in fact make TLA much
+more complicated. For example, it would mean that the obviously true formula
+y′ =y′ is not equivalent totrue, since the formulas (x′ =x+1 )∧(y′ =y′)a n d
+x′ =x+1 would not be equivalent—the ﬁrst would allowyto change and the second
+would not. Like ordinary mathematics, TLA is simple because a formula constrains
+only the variables that it explicitly mentions. This is what makesx
+′ =x+1s o
+much simpler thanx:=x+1 . W r i t i n gUnchanged clauses is a small price to pay
+for the simplicity of ordinary mathematics.
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 41 ---
+
+The Temporal Logic of Actions · 41
+The control structures of ordinary programming languages provide a convenient
+method of specifying that operations are to be performed in a particular order.
+Specifying this in TLA requires the use of explicit control variables, which are a
+source of complexity. However, remember that we are interested in reasoning about
+abstract descriptions of algorithms, not C code. An abstract algorithm usually
+has few separate actions, so its control structure is simple; if control variables are
+needed, they usually add little complexity.
+In abstract algorithms, it is just as common to specify that actions can occur in
+any order as it is to specify that they occur in some particular order. Conventional
+languages make it awkward to allow operations to occur in any order. Dijkstra’s
+guarded commands provide a simple mechanism for allowing nondeterminism, but
+they lack a convenient way to specify the grain of atomicity in the evaluation
+of guards. We urge the reader to code the cache example of Figure 10 in his
+favorite programming language. The precise liveness condition will probably be
+very diﬃcult or even impossible to express within the language. Even ignoring
+the liveness condition, we expect that the TLA formula will be simpler than the
+program.
+Any language will be better than TLA at representing a program written espe-
+cially for that language. Furthermore, a familiar notation, no matter how cumber-
+some, invariably seems simpler than an unfamiliar one. Our experience suggests
+that after one gets used to its notation, the TLA description of a “randomly cho-
+sen” algorithm is likely to seem simpler than its representation in a conventional
+programming language, though it may be longer. (If brevity were synonymous with
+simplicity, APL would be easier to read than Pascal.)
+9.3 Reduction
+An algorithmmust ultimately be translatedinto acomputer program. One develops
+a program through a series of reﬁnements, starting from a high-level algorithm and
+eventually reaching a low-level program. Just as we went from Program 1 to the
+ﬁner-grained Program 2, and from the simple processor/memory interface to the
+more complicated cached memory, the entire process from speciﬁcation to C code
+could in principle be carried out in TLA. “All” we would need is a precise semantics
+of C, which would allow the translation of any C program into a TLA formula.
+In practice, the reﬁnement will be carried out in TLA until it becomes obvious
+how to hand-translate the TLA formula into a program in a real programming
+language—one with a compiler that produces satisfactory code. But what does it
+mean for the translation to be obvious?From the point of view of concurrency,
+the translation from the TLA formula to the program is obvious when any step of
+the next-state relation corresponds to an atomic operation of the program. In this
+sense, the translation from an action (sem
+′ = sem +1 )∧Unchanged ⟨...⟩ to an
+atomicV( sem) program statement is obvious.
+Real programming languages usually guarantee only an extremely ﬁne grain of
+atomicity. When executing the statementx:=x+1, the read and write ofxmight
+each consist of several atomic operations. It would be impractical to describe such
+a ﬁne-grained program with a TLA formula. Instead, one reﬁnes the TLA formula
+to the point where each step of the next-state relation either corresponds to an
+atomic program operation likeV( sem), or else can be implemented with any grain
+of atomicity—for example, because it occurs inside an appropriate critical section.
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 42 ---
+
+42 · Leslie Lamport
+When can an atomic operation be implemented with any grain of atomicity?
+To answer this, we must ﬁrst ask: when does a ﬁne-grained program implement a
+coarser-grainedone?There have been a number of partial answers to this question.
+Some lie in folk theorems—for example, that if shared variables are accessed only
+in critical sections, then an entire critical section is equivalent to a single atomic
+operation. Other answers lie in precise results stating that certain classes of proper-
+ties are satisﬁed by a ﬁne-grained program if they are satisﬁed by a coarser-grained
+version [Lipton 1975].
+The question of when a ﬁne-grained program implements a coarser-grained one
+is answered in TLA by a “reduction” theorem. This theorem seems to include
+all prior answers as special cases—both the folk theorems and the precise results.
+The precise statement of the theorem is somewhat complicated, and will be given
+elsewhere. Here, we give only a rough description of what it says. The theorem’s
+conclusion is approximately
+Φ ⇒ ∃∃∃∃∃∃w
+1,...,wn :Φred(w1/v1,...,wn/vn) ∧ ✷R (55)
+where
+Φ is the simple TLA formula (with no hidden variables) describing the original
+program.
+Φred is the coarser-grained “reduced” version of the program.
+v1,...,vn are all the variables that occur in Φ and Φred.
+Ris a predicate containing the variableswi andvi.
+Think of thevi as “real” variables and thewi as “pretend” variables. Formula (55)
+asserts that there exist pretend variables such that the original program operating
+on the real variables implements the reduced program operating on the pretend
+variables, and the relationRalways holds between the real and the pretend vari-
+ables.
+In applying the reduction theorem to critical sections, the reduced formula Φ
+red
+is obtained from the original formula Φ by changing the next-state relation to turn
+an entire execution of a critical section into a single step. The relationRasserts
+that the real and the pretend variables are equal when no process is in its critical
+section.
+In practice, one reasons about the reduced formula Φ
+red and checks that (55)
+implies the correctness of the ﬁne-grained formula Φ. For example, in the critical-
+section application, if a property does not depend on the values assumed by vari-
+ables while processes are in their critical sections, then Φ satisﬁes the property if
+Φred does. One must then verify that the formula Φ representing the actual pro-
+gram satisﬁes the hypotheses of the Reduction Theorem, without actually writing
+Φ. For complicated languages like C, which lack a reasonable formal semantics,
+this veriﬁcation must be informal. Whether formal veriﬁcation is practical, with
+either a new language or a useful subset of an existing one, is a topic for research.
+9.4 What is TLA Good For?
+TLA, like any useful formal system, has a limited domain of applicability. A for-
+malism that encompasses everything is good for nothing. We believe that TLA is
+useful for specifying and verifying safety and liveness properties of discrete systems.
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 43 ---
+
+The Temporal Logic of Actions · 43
+Intuitively, a safety property asserts that something bad does not happen, and a
+liveness property asserts that something good does eventually happen.
+We feel that the most signiﬁcant limitation of TLA is that TLA properties are
+true or false for an individual behavior. Thus, one cannot express statistical prop-
+erties of sets of behaviors—for example, that the program has probability greater
+than .99 of terminating. The only way we know of verifying such properties is to
+construct a formal model of the system, use TLA to verify that the system correctly
+implements the model, and then apply other techniques such as Markov analysis
+to verify that the model has the desired property.
+The limited expressivenessof TLA is not always a disadvantage. As we have seen,
+TLA allows ﬁne-grained implementations of coarser-grained speciﬁcations because
+it can express only properties that are invariant under stuttering. A formalism that
+distinguished between doing nothing and taking a step that produces no change
+would seem to have a tenuous relation to reality. Another class of properties whose
+inexpressibility in TLA causes us no concern are possibility properties. We have
+never found it useful to be able to assert that it is possible for a system to produce
+the right answer. We want to assert that, under certain assumptions, the system
+must produce the right answer.
+TLA can be used to reason about a discrete system even if its behavior depends
+upon continuous physical values. A particularly important physical value is time.
+Best- and worst-case time bounds on algorithms can be expressed as safety prop-
+erties and proved with TLA. For example, the assertion that an algorithm always
+terminates within 15 seconds is a safety property, where time having advanced 15
+seconds without the algorithm having terminated is the “something bad” that does
+not happen. A real-time algorithm can be speciﬁed by conjoining timing constraints
+to the TLA speciﬁcation of the untimed version of the algorithm. A description of
+how TLA is used to reason about real time appears in [Abadi and Lamport 1992].
+The use of TLA for hybrid systems is described in [Lamport 1993].
+9.5 What We Have Omitted
+9.5.1Program Derivation. Derivation of a program by a rigorous procedure that
+guarantees its correctness is preferable to post hoc veriﬁcation. Concurrent algo-
+rithms arederivedbyreﬁninghigher-level, coarser-grainedalgorithmstolower-level,
+ﬁner-grained ones. Reﬁnement is the same as implementation—Ψ reﬁnes Π means
+that Ψ implements Π. Any method for proving that one program implements an-
+other can be used as the basis for program derivation.
+Formalisms based on a programming language can usually prove only that a
+program satisﬁes certain properties, not that one program implements another. In
+such formalisms, reﬁnement is either done informally or with special-purpose rules.
+In TLA, reﬁnement is implication, and we have shown how one can prove that a
+ﬁner-grained algorithm reﬁnes a coarser-grained one. Moreover, some traditional
+reﬁnement steps can be performed in TLA by applying standard mathematical
+laws to rewrite formulas. We believe that TLA should be at least as good as any
+other formalism for deriving concurrent algorithms. Unfortunately, we know of no
+concurrent algorithm used in a real system that was systematically derived, not
+simply justiﬁed by a post hoc derivation. The derivation of concurrent algorithms
+is still in the realm of research.
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 44 ---
+
+44 · Leslie Lamport
+9.5.2“True” Concurrency. TLA is based on an interleaving model of concur-
+rency, in which we assume that an execution of the system consists of a sequence
+of atomic events. It seems paradoxical to represent concurrent systems with a for-
+malism in which events are never concurrent. We will not attempt to justify the
+philosophical correctness of interleaving models for reasoning about concurrent al-
+gorithms. Instead, we have tried to demonstrate the best reason we know for using
+TLA: it is a practical formalism for specifying and verifying safety and liveness
+properties.
+9.5.3Open Systems. We have discussed only closed systems. A closed system
+is one that is completely self-contained—in contrast to an open system, which
+interacts with its environment. Any real system is open; it does not eternally con-
+template its navel, oblivious to the outside world. But for most purposes, one can
+model the actual system together with its environment as a single closed system—
+as we did for the memory example of Section 8. Such an approach is generally
+adequate for reasoning about algorithms. However, some problems can be studied
+only in the context of open systems. For example, composing component systems
+to form one large system makes sense only for components that are open systems.
+TLA can be used to describe and reason about open as well as closed systems.
+But closed systems are simpler, and they provide a necessary foundation for the
+study of open systems. Here, we have developed TLA and applied it to closed
+systems. Open systems are discussed elsewhere [Abadi and Lamport 1993].
+9.5.4System Speciﬁcations. Most readers would expect a two-page Pascal pro-
+gram to be simple and a two-page mathematical formula to be too complicated
+to understand. Yet, since the semantics of TLA is simpler than the semantics of
+Pascal, a TLA formula should be simpler than a Pascal programof the same length.
+The main reason mathematical formulas seem to get very complicated when they
+get large is that mathematicians have not developed notations for structuring large
+formulas. We have introduced some simple conventions that make the TLA formu-
+las describing abstract algorithms as easy to read as the corresponding programs.
+TLA can be used not just to describe abstract algorithms, but also to specify
+complex systems. System speciﬁcations can be dozens or even hundreds of pages
+long. Managing the complexity of large speciﬁcations requires additional notation
+for modular structuring. We have added such notation to TLA to form a language
+called TLA
++ , a purely syntactic extension to TLA with nothing new semantically.
+TLA+ will be described elsewhere.
+10. CONCLUSIONS
+10.1 Historical Note
+TLA is in the tradition of assertional methods for reasoning about programs. These
+methods go back to Floyd [1967], who ﬁrst proved partial correctness and termina-
+tion of sequential programs. Hoare [1969] recast partial correctness reasoning into a
+logical framework. The ﬁrst practical assertional method for reasoning about con-
+current programs was proposed by Ashcroft [1975]. Ashcroft’s work was followed
+by a number of variations on the same theme [Flon and Suzuki 1978; Keller 1976;
+Lamport 1977]; but the one that became popular is the Owicki/Gries method, de-
+veloped by Susan Owicki in her thesis [Owicki1975], which was supervised by David
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 45 ---
+
+The Temporal Logic of Actions · 45
+Gries. All these methods, though clothed in diﬀerent notations, proved safety prop-
+erties by the use of an invariant; they would be described in TLA as applications
+of Rule INV1.
+Temporal logic was ﬁrst used to reason about concurrency by Pnueli [1977]. It
+provided the ﬁrst practical approach to proving more general liveness properties
+than simple termination. Pnueli introduced the simple temporal logic described in
+Section 3, with predicates as the only elementary formulas. Pnueli’s logic was not
+expressive enough to describe all desired properties. It was followed by a plethora
+of proposals for more expressive logics, all obtained by introducing more powerful
+temporal operators. Pnueli [1979] was the ﬁrst to describe a program by a temporal
+logicformula. He, andalmosteveryoneelse who followedhim, representedprograms
+by formulas that are not invariant under stuttering, so a ﬁner-grained program
+could not implement a coarser-grained one. The observation that invariance under
+stuttering permits reﬁnement ﬁrst appeared in [Lamport 1983b].
+The current use of primed and unprimed variables (or their equivalent) for de-
+scribing “before” and “after” states of a program probably goes back to the early
+1970s; we do not know where it ﬁrst appeared. The idea of actually specifying a
+program operation by a relation between primed and unprimed variables appears
+to have been introduced independently by us [Lamport 1983a], Hehner [1984], and
+Shankar and Lam [1984]. These approaches all used the convention that variables
+not mentioned are not changed, so they had the inherent complexity epitomized by
+the observation thaty
+′ =y′ is not equivalent totrue.
+10.2 Comparison with Related Formalisms
+The correctness of an algorithm does not depend on the formalism in which the
+algorithm and its properities are expressed. A proof of correctness should be essen-
+tially the same regardless of the formalism in which it is expressed. A suﬃciently
+informal proof can usually be expressed quite easily in any formalism. Formalisms
+tend to diﬀer in the ease with which the proof can be formalized. They also diﬀer
+in how practical they are for writing large speciﬁcations. (Formal veriﬁcation of
+large speciﬁcations is a diﬃcult and rarely attempted task; it seems premature to
+draw any conclusions about its practicality.)
+10.2.1 Methods Based on a Program Text. Extensions of the standard Floyd/
+Hoare method to concurrent programs prove only invariance properties and ter-
+mination [Apt and Olderog 1990]. Methods for proving more general temporal
+properties have been developed for Unity [Chandy and Misra 1988] and other toy
+languages [Manna and Pnueli 1991]. It is straightforwardto translate a proof in any
+of these methods into a TLA proof. However, none of the common approachesbased
+on proving properties of a program text can express the concept of one program
+implementing another.
+Toy programming languages are not very good for representing real algorithms,
+even if the toy language resembles the language in which the algorithm is imple-
+mented. The most convenient abstraction of a real program may require language
+features, such as atomic operations on complex data structures, that are seldom
+provided by toy languages. Moreover, one must reason about the complete system,
+including components such as ﬁle servers and communication lines that are not part
+of the programitself. A language designed for expressing programsmay be ill suited
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 46 ---
+
+46 · Leslie Lamport
+for describing other components of the system. In particular, it can be awkward,
+or even impossible, to express the complex liveness properties needed to describe
+these components with the simple fairness assumptions built into a programming
+language.
+Programming languages also lack the abstraction mechanisms needed to manage
+the complexity of large speciﬁcations. Consider how we encapsulated the lower-level
+details of Program 2 by deﬁningGo,P,a n dVin Section 9.2. Such deﬁnitions are
+a common method of structuring TLA speciﬁcations. In a programming language,
+Go,P,a n dVwould correspond to procedures with side eﬀects that are executed
+as part of the current atomic operation. Such procedures are missing from all
+programming languages, both toy and real, that we know of.
+10.2.2Automata-Based Approaches. The shortcomings of conventionalprogram-
+ming languages inspired the use of various forms of abstract automata [Lam and
+Shankar 1984; Lynch and Tuttle 1987]. Liveness properties of the automata are ex-
+pressed either by fairness conditions on sets of actions or by formulas in a standard
+temporal logic.
+A suitable language for describing automata should permit abstractions such as
+Go. However, automata-basedmethods lackthe ability to manipulate speciﬁcations
+as mathematical formulas. For example, it seems impossible to write a real-time
+speciﬁcation by expressing timing constraints as an automaton that is combined
+with the untimed speciﬁcation.
+Specifying liveness properties of automata is problematic. Although more ex-
+pressive than the built-in fairness assumptions of a programming language, fairness
+conditions on sets of actions cannot conveniently specify all desired liveness prop-
+erties. Temporal logic is expressive enough, but we know of no way to check for
+machine closure if the fairness requirement can be an arbitrary temporal logic for-
+mula. As explained in Section 5.3, the lack of machine closure often indicates an
+error.
+Automata-based methods can prove that one speciﬁcation implements another.
+The proofs should be essentially the same as the corresponding proof in TLA.
+We do not know of any completely formal proof system for an automata-based
+method, so we cannot say what problems may arise in formalizing the proofs.
+There is reason to believe that machine closure of speciﬁcations is necessary for
+completeness [Abadi and Lamport 1991]. The method of Lam and Shankar [1984]
+is known to be incomplete because it lacks rules for introducing certain kinds of
+auxiliary variables.
+10.2.3Temporal Logics. Many forms of temporal logic have been proposed for
+specifying and reasoning about concurrent algorithms. The most popular ones are
+probably Unity logic [Chandy and Misra 1988] and the logic of Manna and Pnueli
+[1991]. These logics share with TLA all the advantages that come from representing
+an algorithm as a formula.
+TLA diﬀers from other temporal logics because it is based on the principle that
+temporal logic is a necessary evil that should be avoided as much as possible.
+Temporal formulas tend to be harder to understand than formulas of ordinary
+ﬁrst-order logic, and temporal logic reasoning is more complicated than ordinary
+mathematical (nonmodal) reasoning.
+A typical TLA speciﬁcation contains one✷,o n e∃∃∃∃∃∃, and a few WF and/or SF
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 47 ---
+
+The Temporal Logic of Actions · 47
+formulas—even if the speciﬁcation is hundreds of lines long. Most of the speciﬁca-
+tion consists of deﬁnitions of predicates and actions. Temporal reasoning is reduced
+to a bare minimum; it is used almost exclusively for proving liveness properties.
+Formalizing liveness proofs is temporal logic’s forte.
+TLA avoids the extensive use of temporal operators that characterizes other tem-
+poral logic speciﬁcation methods by relying instead on internal variables—variables
+that are hidden with the existential quantiﬁer∃∃∃∃∃∃. With any temporal logic, exis-
+tential quantiﬁcation over ﬂexible variables is neeeded to express most nontrivial
+speciﬁcations. For example, it is necessary for specifying ann-element buﬀer, where
+nis a parameter (free rigid variable) of the speciﬁcation (Note 19). Unity logic lacks
+a hiding operator, so it is inadequate as a formal speciﬁcation language. Instead,
+Unity is used informally by adding the necessary internal variables and pretending
+that they are hidden [Misra 1990].
+All logics that include existential quantiﬁcation over ﬂexible variables in principle
+have essentially the same expressive power. TLA can express all formulas invariant
+under stuttering that Manna and Pnueli’s logic can. However, their logic can
+also express formulas that are not invariant under stuttering. Such formulas yield
+speciﬁcations that cannot be reﬁned. Although all TLA formulas are expressible
+in Manna and Pnueli’s logic, there is no simple translation from TLA to their logic
+because its quantiﬁcation operator is not invariant under stuttering.
+Notes
+Note 1. We ﬁnd set theory to be the most natural basis for a logic of actions, in
+which caseVal is the collection of all sets. However, a “smaller” collectionVal is
+adequate for many purposes.
+Note 2. Formally, + is anoperator,a n dx+yis an abbreviation for +(x,y).
+An expression is either a variable, a constant symbol, or an expression of the form
+o(e
+1,...,en)w h e r eois an operator and theei are expressions. An operatoro
+has a meaning [[o]], and the meaning of an expression is deﬁned inductively—for
+example,s[[+(e1,e2)]] equals [[+]](s[[e1]],s[[e2]]). If we base the logic on set theory,
+all the operators we need, such as +, can be deﬁned in terms of the following four
+primitive ones:∧,¬,∈,a n dε(Hilbert’s “choice” operator [Leisenring 1969]). In
+the discussion, we do not distinguish between + and [[+]], so we writes[[x+y]] =
+s[[x]] +s[[y]].
+Note 3. When proving the validity of an action by ordinary reasoning,xandx′
+must be considered distinct variables. For example, letAbe the action (x=y)⇒
+(x′ =y′). Naive substitution of equals for equals might lead one to think thatAis
+valid. However,s[[A]]tdoes not equaltrue ifsis a state such thats[[x]] =s[[y]] and
+tis a state such thatt[[x]]̸=t[[y]].
+Note 4. Just as we do not bother distinguishing the constant symbolNat from
+its meaning [[Nat]], the set of naturals, we do not distinguish the rigid variablesm
+andn from their meanings, which are ﬁrst-order variables of the semantics.
+Note 5. Formally, we should distinguish actions from temporal formulas and
+boolean operators on actions from boolean operators on temporal formulas. Letting
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 48 ---
+
+48 · Leslie Lamport
+θ(A) denote the temporal formula that we now writeA, we should rewrite (9) as
+⟨s0,s1,s2,...⟩[[θ(A)]]
+∆
+=s0[[A]]s1
+Letting∨ denote disjunction of temporal formulas, we would then notice that the
+temporal formula we now writeA∨Bcan denote eitherθ(A∨B)o rθ(A)∨θ(B).
+However, these two formulas are equivalent, which is why we can get away with
+writingAinstead ofθ(A) and using the same symbols for boolean operators on
+actions and temporal formulas.
+Note 6. Formula Φ of Figure 2 asserts that every step of Program 1 increments
+eitherxory, but not both. We could allow simultaneous incrementing ofxandy
+by simply redeﬁningM to equalM 1 ∨M2 ∨M12,w h e r e
+M 12
+∆
+=( x′ =x+1) ∧(y′ =y+1)
+However, there is no reason to complicate Φ in this way. In representing the exe-
+cution ofx:=x+1 by a single step, we are already modeling a complex operation
+as one event. Nothing would be gained by allowing the additional possibility of
+representing the executions of two separate statements as a single step.
+Note 7. To write the state function⟨x,y⟩, we must assume that any pair of
+values is a value. More generally, we assume that⟨c1,...,cn⟩ is a value, for any
+valuesc1,..., cn.
+Note 8. More precisely, we deﬁne✸⟨A⟩f to be an abbreviation for¬✷[¬A]f.
+The calculation shows that¬✷[¬A]f is equivalent to the RTLA formula✸⟨A⟩f
+obtained from the deﬁnitions (7) of✸ and (15) of⟨A⟩f.
+Note 9. We have told a white lie;M 1 is not equivalent to⟨M 1⟩⟨x, y⟩. For exam-
+ple, suppose there is a value∞ such that∞+1e q u a l s∞,a n dl e tsbe a state in
+whichxhas the value∞. Then the pairs,sis anM 1 step, but not an⟨M 1⟩⟨x, y⟩
+step. However, it is true that deﬁnitions (14) and (16) are equivalent, because
+InitΦ ∧✷[M]⟨x, y⟩ implies that the values ofxandyare always natural numbers,
+andn+1 ̸=n is true for any natural numbern.
+Note 10. Observe thatEnabled ⟨M 1⟩⟨x, y⟩ is not equivalent totrue. For example,
+⟨M 1⟩⟨x, y⟩ is not enabled in a state in whichxequals∞ (see Note 9). However,
+⟨M 1⟩⟨x, y⟩ is enabled in any state in whichxis a natural number, soInitΦ ∧
+✷[M]⟨x, y⟩ implies✷Enabled ⟨M 1⟩⟨x, y⟩. Hence, (16) and the deﬁnition of Φ in
+Figure 3 are equivalent.
+Note 11. The hypothesis of STL1 means thatFis a propositional tautology or
+is derivable by the laws of propositional logic from provable formulas.
+Note 12. It is somewhat surprising that this completeness result holds even
+though rules STL1–STL6 are not enough to prove all tautologies of simple tem-
+poral logic.
+Note 13. It is not necessary for“abc” ∈Nat to be false. Formula (30) is true even
+if“abc” should happen to equal 135. By not assuming that strings and numbers
+are disjoint sets, we allow implementations in which strings and numbers share a
+common representation—for example, as strings of bits. We do, however, assume
+that“abc” does not equal“xyz”.
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 49 ---
+
+The Temporal Logic of Actions · 49
+Note 14. As an example of the problems introduced by types, consider a variable
+bof type “array of boolean”. Ifeis an expression, thenb[e]i sas t a t ep r e d i c a t e .
+What is the meaning of this state predicate when the value ofeis not in the index
+set ofb?There are several possible answers, none of which we ﬁnd pleasant. This
+problem is not addressed in the books by Manna and Pnueli [1991] and Chandy
+and Misra [1988], which allow boolean array variables. It is this very problem that
+led us to make booleans distinct from values, so state predicates are distinct from
+state functions.
+Note 15. In the deﬁnition ofS(m,v), the symbolsmandvare parameters. The
+expressionS( adr,val) denotes the formula obtained by substitutingadr formand
+val forvin this deﬁnition.
+Note 16. Quantiﬁcation over rigid variables can be deﬁned in terms of quantiﬁ-
+cation over ﬂexible variables by
+∃c :F
+∆
+= ∃∃∃∃∃∃x:F(x/c)∧✷[false]x
+wherec is a rigid variable andxis any ﬂexible variable that does not occur in the
+temporal formulaF.
+Note 17. The factthatTLAisatypelesslogicandLPistyped causednoproblem;
+just two basic LP types, corresponding to TLA’s values and booleans, were used.
+The actual LP proofs are somewhat cumbersome because LP is designed to use
+types instead of sets. However, translating from a typed version of TLA into LP
+would be quite diﬃcult—unless one used LP’s type system for TLA. Adopting
+LP’s type system, with its lack of subtyping and union types, would make it quite
+awkward to represent many simple algorithms in TLA.
+Note 18. To be rigorous, we would have to writepc[i] instead ofpc
+i, replacing
+the two variablespc1 andpc2 by a single “array” variablepc. (Formally,pc is a
+variable whose value is a function with domain{1,2}.)
+Note 19. A speciﬁcation of a buﬀer should describe the interface operations of
+adding and removing elements from the buﬀer, but should not describe the internal
+state of the buﬀer. In all the temporal logics we know of, the only way to specify
+ann-element buﬀer is to describe how the interface operations interact with the
+internal state, and then hide the internal state by existential quantiﬁcation.
+ACKNOWLEDGMENTS
+Mart´ın Abadi helped to develop TLA and is the source of many of the ideas pre-
+sented here, including the use of an untyped logic. Frits Vaandrager helped me
+clarify many parts of the exposition and made a valiant but unsuccessful attempt
+to persuade me that types are useful in logic. Fred Schneider, Reino Kurki-Suonio,
+Urban Engberg, and Peter Grønning caught a number of errors in earlier ver-
+sions. Bryan Olivier prevented me from augmenting STL1–STL6 with a redundant
+rule. A study group at Aarhus University that included Douglas Gurr, Carolyn
+Brown, and Henrik Andersen provided helpful comments. Jeﬀ Line, Peter Han-
+cock, Dominique Mery, and Jack Wiledon discovered some typographical errors.
+Peter Ladkin requested Note 11. Luca Cardelli and Cynthia Hibbard suggested
+some improvements. I was helped in preparing the current version by two refer-
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 50 ---
+
+50 · Leslie Lamport
+ees, whose carefully considered and detailed comments went well beyond the call
+of duty.
+References
+Abadi, M. and Lamport, L. 1993. Conjoining speciﬁcations. Res. Rep. 118,
+Digital Equipment Corp., Systems Research Center, Palo Alto, Calif.
+Abadi, M. and Lamport, L. 1992. An old-fashioned recipe for real time. Re-
+search Report 91, Digital Equipment Corp., Systems Research Center, Palo
+Alto, Calif.
+6
+Abadi, M. and Lamport, L. 1991. The existence of reﬁnement mappings.
+Theor. Comp. Sci. 82, 2 (May), 253–284.
+Alpern, B. and Schneider, F. B. 1985. Deﬁning liveness.Inf. Process.
+Lett. 21, 4 (Oct.), 181–185.
+Apt, K. R. 1981. Ten years of Hoare’s logic: A survey—part one.ACM Trans.
+Programm. Lang. Syst. 3, 4 (Oct.), 431–483.
+Apt, K. R. and Olderog, E.-R. 1990.Veriﬁcation of Sequential and Concur-
+rent Programs. Springer-Verlag, New York.
+Ashcroft, E. A. 1975. Proving assertions about parallel programs.J. Comput.
+Syst. Sci. 10 , 110–135.
+Burch, J. R. , C l a r k e ,E .M ., McMillan, K. L. , Dill, D. L. , and Hwang,
+L. J. 1992. Symbolic model checking: 1020 states and beyond.Inf. Com-
+put. 98, 2 (June), 142–170.
+Chandy, K. M. and Misra, J. 1988. Parallel Program Design. Addison-Wesley,
+Reading, Mass.
+de Bakker, J. W. , Huizing, C., de Roever, W. P. , and Rozenberg, G.
+(Eds.) 1992.Real-Time: Theory in Practice , Lecture Notes in Computer Sci-
+ence, vol. 600. Proceedings of a REX Real-Time Workshop, Springer-Verlag,
+Berlin.
+Dijkstra, E. W. 1968. The structure of the “THE”-multiprogramming system.
+Comm. ACM 11, 5 (May), 341–346.
+Dijkstra, E. W. 1976.A Discipline of Programming. Prentice-Hall, Englewood
+Cliﬀs, N. J.
+Engberg, U., Grønning, P., and Lamport, L. 1992. Mechanical veriﬁcation
+of concurrent systems with TLA. InComputer-Aided Veriﬁcation, Lecture
+Notes in Computer Science, Proceedings of the 4th International Conference,
+CAV’92. Springer-Verlag, Berlin.
+Flon, L. and Suzuki, N. 1978.Consistentandcomplete proofrules for the total
+correctness of parallel programs. InProceedings of 19th Annual Symposium
+on Foundations of Computer Science . IEEE, New York, 184–192.
+Floyd, R. W. 1967. Assigning meanings to programs. InProceedings of the
+Symposium on Applied Math. Vol. 19 , American Mathematical Society, Prov-
+idence, Rhode Island, 19–32.
+6An earlier version, without proofs, appeared in [de Bakker et al. 1992, pages 1–27].
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 51 ---
+
+The Temporal Logic of Actions · 51
+Garland, S. J. and Guttag, J. V. 1989.An overviewof LP,the LarchProver.
+InProceedings of the 3rd International Conference on Rewriting Techniques
+and Applications, N. Dershowitz,E d .Lecture Notes on Computer Science ,
+vol. 355. Springer-Verlag, New York, 137–151.
+Hehner, E. C. R. 1984. Predicative programming.Comm. ACM 27, 2( F e b . ) ,
+134–151.
+Hoare, C. 1969. An axiomatic basis for computer programming.Comm.
+ACM 12, 10 (Oct.), 576–583.
+Keller, R. M. 1976. Formal veriﬁcation of parallel programs.Comm. ACM
+19, 7 (July), 371–384.
+Lam, S. S. and Shankar, A. U. 1984. Protocol veriﬁcation via projections.
+IEEE Trans. Softw. Eng. SE-10, 4 (July), 325–342.
+Lamport, L. 1993. Hybrid systems in TLA+ .I nHybrid Systems,R. L. Gross-
+man, A. Nerode, A. P. Ravn , and H. Rischel ,E d s .Lecture Notes in
+Computer Science, vol. 736. Springer-Verlag, Berlin, 77–102.
+Lamport, L. 1983a. Specifying concurrent program modules.ACM Trans. Pro-
+gram. Lang. Syst 5, 2 (April), 190–222.
+Lamport, L. 1983b. What good is temporal logic. InInformation Processing
+83: Proceedings of the IFIP 9th World Congress , R. E. A. Mason ,E d .
+North-Holland, Amsterdam, 657–668.
+Lamport, L. 1977. Proving the correctness of multiprocess programs.IEEE
+Trans. Softw. Eng. SE-3, 2 (Mar.), 125–143.
+Leisenring, A. C. 1969.Mathematical Logic and Hilbert’s ε-Symbol.G o r d o n
+and Breach, New York.
+Lipton, R. J. 1975. Reduction: A method of proving properties of parallel
+programs.Comm. ACM 18, 12 (Dec.), 717–721.
+Lynch, N. and Tuttle, M. 1987.Hierarchicalcorrectnessproofsfordistributed
+algorithms. InProceedings of the 6th Symposium on the Principles of Dis-
+tributed Computing, ACM, New York, 137–151.
+Manna, Z. and Pnueli, A. 1991.The Temporal Logic of Reactive and Concur-
+rent Systems. Springer-Verlag, New York.
+Misra, J. 1990. Specifying concurrent objects as communicating processes.Sci.
+Comput. Program. 14, 2–3, 159–184.
+Owicki, S. 1975.Axiomatic proof techniques for parallel programs.P h .D .t h e s i s ,
+Cornell University, Ithaca N. Y.
+Pnueli, A. 1979. The temporal semantics of concurrent programs. InSeman-
+tics of Concurrent Computation , G. Kahn,E d .Lecture Notes in Computer
+Science, vol. 70. Springer-Verlag, New York, 1–20.
+Pnueli, A. 1977. The temporal logic of programs. InProceedings of the 18th
+Annual Symposium on the Foundations of Computer Science , IEEE, New
+York, 46–57.
+Schroeder, M. D. , Birrell, A. D. , Burrows, M. , Murray, H. , Need-
+ham, R. M., Rodeheffer, T. L.,Satterthwaite, E. H.,and Thacker,
+C. P. 1990. Autonet: A high-speed, self-conﬁguring local area network using
+point-to-point links. Res. Rep. 59, Digital Equipment Corporation, Systems
+Research Center, Palo Alto, Calif.
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.
+
+--- PAGE 52 ---
+
+52 · Leslie Lamport
+Shankar, A. U. and Lam, S. S. 1984. Time-dependent communica-
+tion protocols. InPrinciples of Communication and Networking Protocols ,
+S. S. Lam , Ed. IEEE Computer Society Press, Los Alamitos, Calif., 504–
+519.
+Received November 1992; revised November 1993; accepted December 1993.
+ACM Transactions on Programming Languages and Systems, Vol ?, No. ?, November 1993.

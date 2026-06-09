@@ -1,0 +1,700 @@
+PAGES 89
+
+--- PAGE 1 ---
+
+Synchronization(Chapters 4 & 5)CS 4410Operating Systems
+[R. Agarwal, L. Alvisi, A. Bracy, M. George, E. Sirer, R. Van Renesse]
+
+--- PAGE 2 ---
+
+2
+•Foundations•Semaphores•Monitors & Condition Variables
+
+--- PAGE 3 ---
+
+•Race Conditions•Critical Sections•Example: Too Much Milk•Basic Hardware Primitives •Building a SpinLock
+3
+Synchronization Foundations
+
+--- PAGE 4 ---
+
+Process: •Privilege Level•Address Space•Code, Data, Heap•Shared I/O resources•One or more Threads:•Stack•Registers•PC, SP
+Recall: Process vs. Thread
+4
+Shared amongst threads
+
+
+--- PAGE 5 ---
+
+2 threads updating a shared variable amount•One thread wants to decrement amount by $10K•Other thread wants to decrement amount by 50%
+What happens when both threads are running?
+Two Theads, One Variable
+5
+Memory
+. . .amount -= 10,000;. . . . . .amount *= 0.5;. . .
+100,000amount
+T1 T2
+
+--- PAGE 6 ---
+
+Might execute like this:Two Theads, One Variable
+6
+Memory
+. . .r1 = load from amountr1 = r1 –10,000store r1 to amount. . .
+. . .r2 = load from amountr2 = 0.5 * r2store r2 to amount. . .
+40,000amountOr vice versa (T1 then T2 à45,000)…either way is fine…
+T1
+T2
+
+--- PAGE 7 ---
+
+Or it might execute like this:Two Theads, One Variable
+7
+Memory
+. . .r1 = load from amountr1 = r1 –10,000store r1 to amount. . .
+. . .r2 = load from amount. . .r2 = 0.5 * r2store r2 to amount. . .
+50,000amountLost Update!Wrong ..and very difficult to debug
+T1 T2
+
+--- PAGE 8 ---
+
+= timing dependent error involving shared state •Once thread A starts, it needs to “race” to finish•Whether race condition happens depends on thread schedule•Different “schedules” or “interleavings” exist(total order on machine instructions)
+All possible interleavings should be safe!
+Race Conditions
+8
+
+--- PAGE 9 ---
+
+1.Program execution depends on the possible interleavings of threads’ access to shared state.2.Program execution can be nondeterministic.3.Compilers and processor hardware can reorder instructions.
+Problems with Sequential Reasoning
+9
+
+--- PAGE 10 ---
+
+•Number of possible interleavings is huge•Some interleavings are good•Some interleavings are bad:•But bad interleavings may rarely happen!•Works 100x ≠ no race condition•Timing dependent: small changes hide bugs
+(recall: Therac-25)
+Race Conditionsare Hard to Debug
+10
+
+--- PAGE 11 ---
+
+Thread A:while(i < 10)i= i+ 1;print “A won!”
+Example: Races with Shared Variable
+11
+iis shared and initialized to 0.
+Who wins?Are there any guarantees about this code?What if both run on different same-speed cores?
+Thread B:while(i> -10)i=i-1;print “B won!”
+
+--- PAGE 12 ---
+
+•2 concurrent enqueue() operations?•2 concurrent dequeue() operations?
+What could possibly go wrong?
+Example: Races with Queues
+12
+tailhead
+
+--- PAGE 13 ---
+
+Must be atomic due to shared memory access
+GoalsSafety: 1 thread in a critical section at timeLiveness:all threads make it into the CS if desiredFairness:equal chances of getting into CS… in practice, fairness rarely guaranteed
+Critical Section
+13
+. . .CSEnter();Critical sectionCSExit();. . .
+. . .CSEnter();Critical sectionCSExit();. . .
+T1 T2
+
+--- PAGE 14 ---
+
+14
+Too Much Milk:Safety, Liveness, and Fairness with no hardware support
+
+
+--- PAGE 15 ---
+
+2 roommates, fridge always stocked with milk•fridge is empty → need to restock it•don’t want to buy too much milk
+Caveats•Only communicate by a notepad on the fridge•Notepad has cells with names, like variables:out_to_buy_milkTASK: Write the pseudo-code to ensure that at most one roommate goes to buy milk
+Too Much Milk Problem
+15
+0
+
+--- PAGE 16 ---
+
+Solution #1: No Protection
+16
+if fridge_empty():buy_milk()if fridge_empty():buy_milk()
+T1 T2
+Safety:Only one person (at most) buys milkLiveness:If milk is needed, someone eventually buys it.Fairness:Roommates equally likely to go to buy milk.
+Safe?    Live?    Fair?
+
+--- PAGE 17 ---
+
+Solution #2: add a boolean flag
+17
+while(outtobuymilk):do_nothing();if fridge_empty():outtobuymilk= 1buy_milk()outtobuymilk= 0
+while(outtobuymilk): do_nothing();if fridge_empty():outtobuymilk= 1buy_milk()outtobuymilk= 0
+T1 T2
+Safety:Only one person (at most) buys milkLiveness:If milk is needed, someone eventually buys it.Fairness:Roommates equally likely to go to buy milk.Safe?    Live?    Fair?
+outtobuymilkinitially false
+
+--- PAGE 18 ---
+
+Solution #3: add two boolean flags!
+18
+blues_got_this= 1if !reds_got_thisandfridge_empty():buy_milk()blues_got_this= 0
+reds_got_this= 1if not blues_got_thisandfridge_empty():buy_milk()reds_got_this= 0
+T1 T2
+one for each roommate (initially false):blues_got_this, reds_got_this
+Safety:Only one person (at most) buys milkLiveness:If milk is needed, someone eventually buys it.Fairness:Roommates equally likely to go to buy milk.Safe?    Live?    Fair?
+
+--- PAGE 19 ---
+
+Solution #4: asymmetric flags!
+19
+blues_got_this= 1while reds_got_this:do_nothing()if fridge_empty():buy_milk()blues_got_this= 0
+reds_got_this= 1if not blues_got_thisandfridge_empty():buy_milk()reds_got_this= 0
+T1 T2
+‒ complicated (and this is a simple example!)‒ hard to ascertain that it is correct‒ asymmetric code is hard to generalize & unfair
+Safe?    Live?    Fair?
+one for each roommate (initially false):blues_got_this, reds_got_this
+
+--- PAGE 20 ---
+
+Last Solution: Peterson’s Solution
+20
+blues_got_this= 1turn= redwhile (reds_got_thisand turn==red):do_nothing()if fridge_empty():buy_milk()blues_got_this= 0
+reds_got_this= 1turn= bluewhile (blues_got_thisand turn==blue):do_nothing()if fridge_empty():buy_milk()reds_got_this= 0
+T1 T2another flag turn{blue, red}
+‒ complicated (and this is a simple example!)‒ hard to ascertain that it is correct‒ hard to generalize
+Safe?    Live?    Fair?
+
+--- PAGE 21 ---
+
+•HW primitives to provide mutual exclusion•A machine instruction (part of the ISA!) that:•Reads & updates a memory location•Is atomic because it is a single instruction!•Example: Test-And-Set1 instruction with the following semantics:
+sets the value to 1, returns former value
+Hardware Solution
+21
+ATOMIC int TestAndSet(int *var) {int oldVal= *var;*var= 1;return oldVal;}
+
+--- PAGE 22 ---
+
+Shared variable: int buyingmilk, initially 0Buying Milk with TAS
+22
+while(TAS(&buyingmilk))do_nothing();if fridge_empty():buy_milk()buyingmilk := 0
+while(TAS(&buyingmilk))do_nothing();if fridge_empty():buy_milk()buyingmilk := 0
+T1 T2
+A little hard on the eyes. Can we do better?
+
+--- PAGE 23 ---
+
+Enter: Locks!
+23
+acquire(int *lock) {while(test_and_set(lock))/* do nothing */;}
+release(int *lock) {*lock = 0;}
+
+--- PAGE 24 ---
+
+Shared lock: int buyingmilk, initially 0Buying Milk with Locks
+24
+acquire(&buyingmilk);if fridge_empty():buy_milk()release(&buyingmilk);
+acquire(&buyingmilk);if fridge_empty():buy_milk()release(&buyingmilk);
+T1 T2
+Now we’re getting somewhere!Is anyone not happy with this?
+
+
+--- PAGE 25 ---
+
+Thou shalt not busy-wait!25
+
+--- PAGE 26 ---
+
+Participants not in critical section must spin          → wasting CPU cycles•Replace the “do nothing” loop with a “yield()”?•Threads would still be scheduled and descheduled(context switches are expensive)
+Need a better primitive:•allows one thread to pass through•all others sleep until they can execute again
+Not just any locks: SpinLocks
+26
+
+--- PAGE 27 ---
+
+27
+Foundations•Semaphores•Monitors & Condition •Variables
+
+--- PAGE 28 ---
+
+•Definition•Binary Semaphores•Counting Semaphores•Classic Sync. Problems (w/Semaphores)-Producer-Consumer (w/ a bounded buffer) -Readers/Writers Problem•Classic Mistakes with Semaphores
+28
+Semaphores
+
+--- PAGE 29 ---
+
+Dijkstra introduced in the THE Operating SystemStateful:•a value(incremented/decremented atomically)•a queue•a lockInterface:•Init(starting value)•P (procure): decrement, “consume” or “start using”•V (vacate): increment, “produce” or “stop using”No operation to read the value!
+What is a Semaphore?
+29
+[Dijkstra 1962]
+Dutch 4410: P = Probeer(‘Try'),V = Verhoog('Increment', 'Increase by one')
+
+--- PAGE 30 ---
+
+Semantics of P and V (Part 1)
+30
+P() {while(n<= 0) ;n-= 1;}
+V() {n+= 1;}
+P():•wait until value >0•when so, decrement VALUE by 1V():•increment VALUE by 1
+These are the semantics, but how can we make this efficient?(doesn’t this look like a spinlock?!?)
+
+--- PAGE 31 ---
+
+Semantics of P and V (Complete)
+31
+P() {while(n<= 0) ;n-= 1;}
+V() {n+= 1;}
+P():•block (sit on Q)tilvalue >0•when so, decrementVALUE by 1V():•increment VALUE by 1•resume a thread waiting on Q(if any)
+Okay this looks efficient, but how is this safe?(that’s what the lock is for –both P&V need to TAS the lock)
+
+--- PAGE 32 ---
+
+Semaphore value is either 0 or 1•Used for mutual exclusion(semaphore as a more efficient lock)•Initially 1 in that case
+Binary Semaphore
+32
+S.P()CriticalSection()S.V()S.P()CriticalSection()S.V()
+T1 T2
+Semaphore SS.init(1)
+
+--- PAGE 33 ---
+
+Example: A simple mutex
+S.P()CriticalSection()S.V()
+Semaphore SS.init(1)P() {while(n<= 0) ;n-= 1;}V() {n+= 1;} 33
+
+--- PAGE 34 ---
+
+Semacount can be any integer•Used for signaling or counting resources•Typically: •one thread performs P() to await an event•another thread performs V() to alert waiting thread that event has occurred
+Counting Semaphores
+34
+pkt= get_packet()enqueue(packetq, pkt);packetarrived.V();packetarrived.P();pkt= dequeue(packetq);print(pkt);
+T1 T2
+Semaphore packetarrivedpacketarrived.init(0)PrintingThread:ReceivingThread:
+
+--- PAGE 35 ---
+
+•must be initialized! •keeps state•reflects the sequence of past operations•>0reflects number of future P operations that will succeed
+Not possible to:•read the count•grab multiple semaphores at same time•decrement/increment by more than 1!
+Semaphore’s count:
+35
+
+--- PAGE 36 ---
+
+2+ threads communicate: some threads producedata that others consume
+Bounded buﬀer: size —Nentries—Producer process writes data to buﬀerWrites to • inand moves rightwardsConsumer process reads data from buﬀerReads from • outand moves rightwards
+Producer-Consumer Problem
+36
+0 N-1
+in out
+
+--- PAGE 37 ---
+
+•Pre-processor produces source file for compiler’s parser•Data from bar-code reader consumed by device driver•File data: computer àprinter spooler àline printer device driver•Web server produces data consumed by client’s web browser•“pipe”  ( | ) in Unix    >cat file | sort | more
+Producer-Consumer Applications
+37
+
+--- PAGE 38 ---
+
+Starter Code: No Protection
+38
+// add item to buffervoid produce(int item) {buf[in] = item;in = (in+1)%N;}
+// remove itemint consume() {int item = buf[out];out = (out+1)%N;return item;}Problems:1.Unprotected shared state (multiple producers/consumers)2.Inventory: •Consumer could consume when nothing is there!•Producer could overwrite not-yet-consumed data!
+Shared:int buf[N];int in, out;
+
+--- PAGE 39 ---
+
+Part 1: Guard Shared Resources
+39
+// add item to buffervoid produce(int item) {mutex_in.P();buf[in] = item;in= (in+1)%N;mutex_in.V();
+}
+// remove itemint consume() {mutex_out.P();int item = buf[out];out= (out+1)%N;mutex_out.V();return item;}
+Shared:int buf[N];int in, out;Semaphoremutex_in(1), mutex_out(1);
+nowatomic
+
+--- PAGE 40 ---
+
+Part 2: Manage the Inventory
+40
+void produce(int item) {space.P(); //need spacemutex_in.P();buf[in] = item;in = (in+1)%N;mutex_in.V();item.V(); //new item!}
+int consume() {item.P(); //need itemmutex_out.P();int item = buf[out];out = (out+1)%N;mutex_out.V();space.V(); //more space!return item;}
+Shared:int buf[N];int in, out;Semaphore mutex_in(1), mutex_out(1);Semaphorespace(N), item(0);
+
+--- PAGE 41 ---
+
+Sanity checks
+41
+void produce(int item) {space.P(); //need spacemutex_in.P();buf[in] = item;in = (in+1)%N;mutex_in.V();item.V(); //new item!}
+int consume() {item.P(); //need itemmutex_out.P();int item = buf[out];out = (out+1)%N;mutex_out.V();space.V(); //more space!return item;}
+Shared:int buf[N];int in, out;Semaphore mutex_in(1), mutex_out(1);Semaphorespace(N), item(0);
+Is there a V for every P?1.Mutex2.initialized to 1?Mutex3.P&V in same thread?
+
+--- PAGE 42 ---
+
+Pros:•Live & Safe & Correct•No Busy Waiting! (is this true?)•Scales nicely
+Cons:•Still seems complicated: is it correct? •Not so readable•Easy to introduce bugs
+Producer-consumer: How did we do?
+42
+
+--- PAGE 43 ---
+
+Models access to a database: shared data that some threads readand other threads writeAt any time, want to allow:•multiple concurrent readers—OR—(exclusive)•only a single writer
+Example: making an airline reservation•Browse flights: web site acts as a reader•Reserve a seat:web site has to write into database (to make the reservation)
+Readers-Writers Problem
+43
+[Courtois+ 1971]
+
+--- PAGE 44 ---
+
+Nthreads share 1object in memory•Some write: 1writer active at a time•Some read: nreaders active simultaneouslyInsight:generalizes the critical section conceptImplementation Questions:1.Writer is active.Combo of readers/writers arrive.           Who should get in next? Writer 2.is waiting.Endless of # of readers come.                   Fair for them to become active?For now: back-and-forth turn-taking: •If a reader is waiting, readers get in next  •If a writer is waiting, one writer gets in next
+Readers-Writers Specifications
+44
+
+--- PAGE 45 ---
+
+Readers-Writers Solution
+45
+void write() rw_lock.P();. . ./*perform write */. . .rw_lock.V();
+}
+int read() {count_mutex.P();rcount++;if (rcount== 1)rw_lock.P();count_mutex.V();. . ./* perform read */. . .count_mutex.P();rcount--;if (rcount== 0)rw_lock.V();count_mutex.V();}
+Shared:int rcount;Semaphore count_mutex(1); Semaphore rw_lock(1);
+
+--- PAGE 46 ---
+
+If there is a writer:•First reader blocks on rw_lock•Other readers block on mutexOnce a reader is active, all readers get to go through•Which reader gets in first?The last reader to exit signals a writer•If no writer, then readers can continueIf readers and writers waiting on rw_lock& writer exits•Who gets to go in first?
+Readers-Writers: Understanding the Solution
+46
+
+--- PAGE 47 ---
+
+When readers active no writer can enter   ✔•Writers wait @ rw_lock.P()When writer is active  nobody can enter   ✔•Any other reader or writer will wait (where?)Back-and-forth isn’t so fair:                           •Any number of readers can enter in a row•Readers can “starve” writers
+Fair back-and-forth semaphore solution is tricky!•Try it! (don’t spend too much time…)
+Readers-Writers: Assessing the Solution
+47
+
+--- PAGE 48 ---
+
+•Definition•Binary Semaphores•Counting Semaphores•Classic Sync. Problems (w/Semaphores)-Producer-Consumer (w/ a bounded buffer) -Readers/Writers Problem•Classic Mistakes with Semaphores
+48
+Semaphores
+
+--- PAGE 49 ---
+
+Classic Semaphore Mistakes
+49
+P(S)CSP(S)
+I
+V(S)CSV(S)P(S)CS
+J
+K
+P(S)if(x) return;CSV(S)
+L
+I stuck on 2nd P(). Subsequent processes freeze up on 1st P().
+Undermines mutex: •J doesn’t get permission via P() •“extra” V()s allow other processes into the CS inappropriatelyNext call to P() will freeze up. Confusing because the otherprocess could be correct but hangs when you use a debugger to look at its state!Conditional code can change code flow in the CS. Caused by code updates (bug fixes, etc.) by someone other than original author of code.
+‏typo 
+‏typo 
+‏omission
+
+--- PAGE 50 ---
+
+“During system conception … we used the semaphores in two completely different ways. The difference is so marked that, looking back, one wonders whether it was really fair to present the two ways as uses of the very same primitives. On the one hand, we have the semaphores used for mutual exclusion, on the other hand, the private semaphores.” —Dijkstra “The structure of the ’THE’-Multiprogramming System” Communications of the ACM v. 11 n. 5 May 1968.
+Semaphores Considered Harmful
+50
+
+--- PAGE 51 ---
+
+Theseare “low-level” primitives. Small errors:•Easily bring system to grinding halt•Very difficult to debugTwo usage models:•Mutual exclusion:“real” abstraction is a critical section•Communication:threads use semaphores to communicate (e.g., bounded buffer example)Simplification:Provide concurrency support in compileràEnter Monitors
+Semaphores NOT to the rescue!
+51
+
+--- PAGE 52 ---
+
+52
+Foundations•Semaphores•Monitors & Condition •Variables
+
+--- PAGE 53 ---
+
+Multiple Processors Hardware InterruptsHARDWARE
+Interrupt DisableAtomic R/W InstructionsATOMIC INSTRUCTIONS
+SYNCHRONIZATION OBJECTS
+CONCURRENT APPLICATIONS. . . 
+SemaphoresLocksConditionVariablesMonitors
+53
+
+--- PAGE 54 ---
+
+Definition•Simple Monitor Example•Implementation•Classic Sync. Problems with Monitors•Bounded Buﬀer Producer- -ConsumerReaders/Writers Problems-Barrier Synchronization-Semantics & Semaphore Comparisons•Classic Mistakes with Monitors• 54
+Monitors  & Condition Variables
+
+--- PAGE 55 ---
+
+Only one thread can execute monitor procedure at any time (aka “in the monitor”)
+Monitor Semantics guarantee mutual exclusion
+55
+Monitormonitor_name{// shared variable declarationsprocedure P1() {}procedure P2() {}..procedure PN() {}initialization_code() {}}
+Monitorbounded_buffer{int in=0, out=0, nElem=0;intbuffer[N];consume() {}produce() {}}
+in the abstract: for example:
+only one operationcan execute at a time
+can only access shared datavia a monitor procedure
+
+--- PAGE 56 ---
+
+56
+One Thread at a Time in the Monitor!
+49inout
+consume() {  }produce() {  }
+consumer
+consumer
+consumer
+consumer
+producer
+producer
+
+--- PAGE 57 ---
+
+Producer-Consumer Revisited
+57
+Problems:1.Unprotected shared state (multiple producers/consumers)
+2.Inventory: •Consumer could consume when nothing is there!•Producer could overwrite not-yet-consumed data!
+Solved via Monitor.Only 1 thread allowed in at a time.•Only one thread can execute monitor procedure at any time•If second thread invokes monitor procedure at that time, it will block and wait for entry to the monitor.•If thread within a monitor blocks, another can enter
+What about these?àEnter Condition Variables
+
+--- PAGE 58 ---
+
+A mechanism to wait for events3 operations on Condition Variable Condition x•x.wait(): sleep until woken up (could wake up on your own)•x.signal(): wake at least one process waiting on condition (if there is one). No history associated with signal.•x.broadcast(): wake all processes waiting on condition (useful for resource manager)
+Condition Variables
+58
+!! NOT the same thing as UNIX wait & signal !!
+
+--- PAGE 59 ---
+
+You must hold the monitor lock to call these operations.To wait for some condition:while not some_predicate():CV.wait()•atomically releases monitor lock & yields processor•as CV.wait()returns, lock automatically reacquiredWhen the condition becomes satisfied:CV.broadcast(): wakes up all threadsCV.signal(): wakes up at least one thread
+Using Condition Variables
+59
+
+--- PAGE 60 ---
+
+Condition Variables Live in theMonitor
+60
+1. Shared Private Datathe resource•can only be accessed from in the monitor•2. Procedures operating on datagateway to the resource•can only act on data local to the monitor•3. Synchronization primitivesamong threads that access the procedures•[Hoare 1974]
+Abstract Data Type for handling shared resources, comprising:
+
+--- PAGE 61 ---
+
+Types of Wait Queues
+61
+Monitors have two kinds of “wait” queues•Entry to the monitor:a queue of threads waiting to obtain mutual exclusion & enter•Condition variables:each condition variable has a queue of threads waiting on the associated condition
+
+
+--- PAGE 62 ---
+
+Kid and Cook Threads 
+62
+kid_main() {play_w_legos()BK.kid_eat()bathe()make_robots()BK.kid_eat()facetime_Karthik()facetime_oma()BK.kid_eat()}
+cook_main() {wake()shower()drive_to_work()while(not_5pm)BK.makeburger()drive_to_home()watch_got()sleep()}
+Monitor BurgerKing{Lock mlock
+int numburgers= 0condition hungrykid
+kid_eat:with mlock:while (numburgers==0)hungrykid.wait()numburgers-= 1makeburger:withmlock:++numburgerhungrykid.signal()}
+Ready
+ Running
+
+
+--- PAGE 63 ---
+
+•Definition•Simple Monitor Example•Implementation•Classic Sync. Problems with Monitors-Bounded Buffer Producer-Consumer-Readers/Writers Problems-Barrier Synchronization•Semantics & Semaphore Comparisons•Classic Mistakes with Monitors63
+Monitors  & Condition Variables
+
+--- PAGE 64 ---
+
+Can be embedded in programming language: •Compiler adds synchronization code, enforced at runtime•Mesa/Cedarfrom Xerox PARC•Java: synchronized, wait, notify, notifyall•C#:lock, wait (with timeouts) , pulse, pulseall•Python:acquire, release, wait, notify, notifyAllMonitors easier & safer than semaphoresCompiler can check•Lock acquire and release are implicit and cannot •be forgotten
+Language Support
+64
+
+--- PAGE 65 ---
+
+class BK:def__init__(self):self.lock= Lock()self.hungrykid= Condition(self.lock)self.nBurgers= 0
+Monitors in Python
+65
+defmake_burger(self):with self.lock:self.nBurgers= self.nBurgers+ 1self.hungrykid.notify()
+signal() ➙notify()
+broadcast) ➙notifyAll()
+defkid_eat(self):with self.lock:while self.nBurgers==0:self.hungrykid.wait()self.nBurgers= self.nBurgers-1
+waitreleases lock when called•re•-acquires lock when it returns
+
+--- PAGE 66 ---
+
+Monitors in “4410 Python” : __init__
+66
+class BK:def__init__(self):self.lock= Lock()self.hungrykid= Condition(self.lock)self.nBurgers= 0
+from rvrimport MP, MPthreadclass BurgerKingMonitor(MP):def__init__(self):MP.__init__(self,None)self.lock= Lock(“monitor lock”)self.hungrykid= self.lock.Condition(“hungry kid”)self.nBurgers= self.Shared(“numburgers”, 0)
+Python
+4410 Python
+
+--- PAGE 67 ---
+
+Monitors in “4410 Python” : kid_eat
+67
+defkid_eat(self):with self.lock:while self.nBurgers== 0:self.hungrykid.wait()self.nBurgers= self.nBurgers-1
+defkid_eat(self):with self.lock:while (self.nBurgers.read() == 0):self.hugryKid.wait()self.nBurgers.dec()
+Python
+4410 Python
+We do this for helpful feedback:•from auto-grader •from debuggerLook in the A2/doc directory for details and example code.
+
+--- PAGE 68 ---
+
+Definition•Simple Monitor Example•Implementation•Classic Sync. Problems with Monitors•Bounded Buﬀer Producer- -ConsumerReaders/Writers Problems-Barrier Synchronization-Semantics & Semaphore Comparisons•Classic Mistakes with Monitors• 68
+Monitors  & Condition Variables
+
+--- PAGE 69 ---
+
+Producer-Consumer
+69
+Monitor Producer_Consumer{char buf[SIZE];int n=0, tail=0, head=0;condition not_empty, not_full;produce(char ch) {while(n == SIZE):wait(not_full);buf[head] = ch;head = (head+1)%SIZE;n++;notify(not_empty);}char consume()  {while(n == 0):wait(not_empty);ch= buf[tail];tail = (tail+1)%SIZE; n--;notify(not_full);return ch;}}
+What if no thread is waiting when notify() called?Then signal is a nop.  Very different from calling V() on a semaphore –semaphores remember how many times V() was called!
+
+--- PAGE 70 ---
+
+Readers and Writers
+70
+Monitor ReadersNWriters{int waitingWriters=0, waitingReaders=0, nReaders=0, nWriters=0;Condition canRead, canWrite;BeginWrite()with monitor.lock:++waitingWriterswhile (nWriters>0 or nReaders>0)canWrite.wait();--waitingWritersnWriters= 1;
+EndWrite()with monitor.lock:nWriters= 0if WaitingWriters> 0canWrite.signal();else if waitingReaders> 0canRead.broadcast();}
+void BeginRead()with monitor.lock:++waitingReaderswhile (nWriters>0 or waitingWriters>0)canRead.wait();--waitingReaders++nReaders
+void EndRead()with monitor.lock:--nReaders;if (nReaders==0 and waitingWriters>0)canWrite.signal();
+
+--- PAGE 71 ---
+
+A writer can enter if:no other active writer•&&•no waiting readers
+When a writer finishes:check for waitingreaders Y ➙lets all enterN ➙if writer waiting, lets 1 enter
+Understanding the Solution
+71
+A reader can enter if:•no active writer &&•no waiting writers
+Last reader finishes: •it lets 1 writer in (if any)
+
+--- PAGE 72 ---
+
+Triesto be fair:If a writer is waiting, readers queue up•If a reader (or another writer) is active •or waiting, writers queue up… mostly fair, although once it lets a reader in, it lets ALL waiting readers in all at once, even if some showed up “a!er” other waiting writers
+Fair?
+72
+
+--- PAGE 73 ---
+
+•Important synchronization primitive in high-performance parallel programs•nThreadsthreads divvy up work, run rounds of computations separated by barriers.•could fork & wait but –thread startup costs–waste of a warm cacheCreate n threads & a barrier.Each thread does round1()barrier.checkin()Each thread does round2()barrier.checkin()
+Barrier Synchronization
+73
+
+--- PAGE 74 ---
+
+What’s wrong with this?
+Checkin with 1 condition variable
+74
+self.allCheckedIn= Condition(self.lock)
+defcheckin():with self.lock:nArrived++if nArrived< nThreads:while nArrived< nThreads:allCheckedIn.wait()else: allCheckedIn.broadcast()
+
+--- PAGE 75 ---
+
+Definition•Simple Monitor Example•Implementation•Classic Sync. Problems with Monitors•Bounded Buﬀer Producer- -ConsumerReaders/Writers Problems-Barrier Synchronization-Semantics & Semaphore Comparisons•Classic Mistakes with Monitors• 75
+Monitors  & Condition Variables
+
+--- PAGE 76 ---
+
+The condition variables we have defined obey BrinchHansen (or Mesa) semantics•signaled thread is moved to ready list, but not guaranteed to run right awayHoare proposes an alternative semantics•signaling thread is suspended and, atomically, ownership of the lock is passed to one of the waiting threads, whose execution is immediately resumed
+CV semantics: Hansen vs. Hoare
+76
+
+--- PAGE 77 ---
+
+Kid and Cook Threads Revisited
+77
+kid_main() {play_w_legos()BK.kid_eat()bathe()make_robots()BK.kid_eat()facetime_Karthik()facetime_oma()BK.kid_eat()}
+cook_main() {wake()shower()drive_to_work()while(not_5pm)BK.makeburger()drive_to_home()watch_got()sleep()}
+Monitor BurgerKing{Lock mlock
+int numburgers= 0condition hungrykid
+kid_eat:with mlock:while (numburgers==0)hungrykid.wait()numburgers-= 1makeburger:withmlock:++numburgerhungrykid.signal()}
+Ready
+Hoare vs. Mesa semantics•What happens if there are lots of kids?
+
+
+--- PAGE 78 ---
+
+Hoare Semantics: monitor lock transferred directly from signaling thread to woken up thread+clean semantics, easy to reason about–not desirable to force signaling thread to give monitor lock immediately to woken up thread–confounds scheduling with synchronization,    penalizes threadsMesa/Hansen Semantics:puts a woken up thread on the monitor entry queue, but does not immediately run that thread, or transfer the monitor lock
+Hoare vs. Mesa/Hansen Semantics
+78
+
+--- PAGE 79 ---
+
+Which is Mesa/Hansen? Which is Hoare?
+79
+wikipedia.org
+
+--- PAGE 80 ---
+
+Hansen/Mesasignal() and broadcast() are hints•adding them affects performance, never safetyShared state must be checked in a loop (could have changed)•robust to spurious wakeupsSimple implementation •no special code for thread scheduling or acquiring lockUsed in most systemsSponsored by a Turing Award(Butler Lampson)
+HoareSignaling is atomic with the 
+resumption of waiting thread•shared state cannot change before waiting thread resumedShared state can be checked 
+using an if statement
+Easier to prove livenessTricky  to implement
+Used in most books
+Sponsored by a Turing Award
+(Tony Hoare)
+What are the implications?
+80
+
+--- PAGE 81 ---
+
+Access to monitor is controlled by a lock. To call wait or signal, thread must be in monitor (= have lock).Wait vs. P:•Semaphore P() blocks thread only if value < 1•wait always blocks & gives up the monitor lockSignal vs. V: causes waiting thread to wake up•V() increments ➙future threads don't wait on P()•No waiting thread  ➙signal = nopCondition variables have no history!•Monitors easier and safer than semaphores•Lock acquire/release are implicit, cannot be forgotten•Condition for which threads are waiting explicitly in code
+Condition Variables vs. Semaphores
+81
+
+--- PAGE 82 ---
+
+Condition variables force the actual conditions that a thread is waiting for to be made explicit in the code•comparison preceding the “wait()” call concisely specifies what the thread is waiting forCondition variables themselves have no state àmonitor  must explicitly keep the state that is important for synchronization•This is a good thing!
+Pros of Condition Variables
+82
+
+--- PAGE 83 ---
+
+12 Commandments of Synchronization
+83
+Thou shalt name your synchronization variables properly. 1.Thou shalt not violate abstraction boundaries nor try to 2.change the semantics of synchronization primitives.Thou shalt use monitors and condition variables instead of 3.semaphores whenever possible.Thou shalt not mix semaphores and condition variables.4.Thou shalt not busy5. -wait.All shared state must be protected.6.Thou shalt grab the monitor lock upon entry to, and release 7.it upon exit from, a procedure.
+
+--- PAGE 84 ---
+
+12 Commandments of Synchronization
+84
+8.Honor thy shared data with an invariant, which your code may assume holds when a lock is successfully acquired and your code must make true before the lock is released.9.Thou shalt cover thy naked waits.10.Thou shalt guard your wait predicates in a while loop. Thou shalt never guard a wait statement with an if statement.11.Thou shalt not split predicates.12.Thou shalt help make the world a better place for the creator’s mighty synchronization vision.
+
+--- PAGE 85 ---
+
+while not some_predicate():CV.wait()What’s wrong with this?random_fn1()CV.wait()random_fn2()
+#9: Cover Thy Naked Waits 
+85
+How about this?with self.lock: a=False while not a:self.cv.wait() a=True
+
+--- PAGE 86 ---
+
+What is wrong with this?if not some_predicate():CV.wait()
+#10: Guard your wait in a while loop
+86
+
+--- PAGE 87 ---
+
+with lock:What is wrong with this?while not condA: condA_cv.wait()while not condB: condB_cv.wait()
+Better:with lock:while not condAor not condB:if not condA: condA_cv.wait()if not condB: condB_cv.wait()
+#11: Thou shalt not split predicates 
+87
+
+--- PAGE 88 ---
+
+•Use consistent structure•Always hold lock when using a condition variable•Never spin in sleep()
+A few more guidelines
+88
+
+--- PAGE 89 ---
+
+Several ways to handle themeach has its own pros and cons•
+Programming language support simplifies writing multithreaded applicationsPython condition variables•Java and C# support at most one condition variable •per object, so are slightly more limited
+Some program analysis toolsautomate checkingmake sure code is using synchronization correctly•hard part is defining “correct”•
+Conclusion: Race Conditions are a big pain!
+89
+deal

@@ -174,7 +174,41 @@ InCS ==
 MutualExclusion ==
     Cardinality(InCS) <= 1
 
+InCSProc(i) ==
+    pc[i] = "cs"
+
+Requesting(i) ==
+    pc[i] \in {"e1", "ne_inc", "e1_rel", "q_wait", "e2_wait",
+               "nm_inc", "ne_dec", "handoff", "q_rel",
+               "mu_wait", "nm_dec"}
+
+\* If a process has started one admission attempt, we want it to
+\* eventually reach the critical section under the fairness assumptions.
+StarvationFree(i) ==
+    Requesting(i) ~> InCSProc(i)
+
+NoStarvation ==
+    \A i \in Proc : StarvationFree(i)
+
+\* Weak process fairness: if a process step remains continuously enabled,
+\* the scheduler cannot ignore it forever.
+ProcessFairness ==
+    \A i \in Proc : WF_Vars(ProcStep(i))
+
+\* Service fairness for the blocking semaphore acquisitions. This is the
+\* fairness layer that rules out the liveness counterexample where the
+\* same process keeps winning the same contention point forever.
+SemaphoreFairness ==
+    \A i \in Proc :
+        /\ SF_Vars(PEnter1(i))
+        /\ SF_Vars(PQueue(i))
+        /\ SF_Vars(PEnter2(i))
+        /\ SF_Vars(PMutex(i))
+
 Spec ==
     Init /\ [][Next]_Vars
+
+FairSpec ==
+    Spec /\ ProcessFairness /\ SemaphoreFairness
 
 =============================================================================

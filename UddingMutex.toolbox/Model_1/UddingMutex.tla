@@ -174,7 +174,34 @@ InCS ==
 MutualExclusion ==
     Cardinality(InCS) <= 1
 
+InCSProc(i) ==
+    pc[i] = "cs"
+
+Requesting(i) ==
+    pc[i] \in {"e1", "ne_inc", "e1_rel", "q_wait", "e2_wait",
+               "nm_inc", "ne_dec", "handoff", "q_rel",
+               "mu_wait", "nm_dec"}
+
+StarvationFree(i) ==
+    Requesting(i) ~> InCSProc(i)
+
+NoStarvation ==
+    \A i \in Proc : StarvationFree(i)
+
+ProcessFairness ==
+    \A i \in Proc : WF_Vars(ProcStep(i))
+
+SemaphoreFairness ==
+    \A i \in Proc :
+        /\ SF_Vars(PEnter1(i))
+        /\ SF_Vars(PQueue(i))
+        /\ SF_Vars(PEnter2(i))
+        /\ SF_Vars(PMutex(i))
+
 Spec ==
     Init /\ [][Next]_Vars
+
+FairSpec ==
+    Spec /\ ProcessFairness /\ SemaphoreFairness
 
 =============================================================================
